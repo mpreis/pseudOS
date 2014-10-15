@@ -92,8 +92,13 @@ timer_sleep (int64_t ticks)
   int64_t start = timer_ticks ();
 
   ASSERT (intr_get_level () == INTR_ON);
-  while (timer_elapsed (start) < ticks) 
-    thread_yield ();
+  /* 
+   * old version: busy waiting
+   * while (timer_elapsed (start) < ticks) 
+   * thread_yield ();
+   */
+  
+  thread_block();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -172,6 +177,10 @@ timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
+  
+  enum intr_level old_level = intr_disable ();
+  thread_foreach (wake_up_thread, 0);
+  intr_set_level (old_level);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -244,3 +253,10 @@ real_time_delay (int64_t num, int32_t denom)
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
+
+static void wake_up_thread(thread t, void *aux) {
+  if(t.state == THREAD_BLOCKED && t.ticks_to_sleep == 0) {
+    thread_unblock(t);
+  }
+}
+
