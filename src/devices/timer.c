@@ -29,6 +29,7 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
+static void wake_up_thread(struct thread *t, void *aux);
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -89,16 +90,23 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
-
-  ASSERT (intr_get_level () == INTR_ON);
   /* 
    * old version: busy waiting
+   * int64_t start = timer_ticks ();
+   * ASSERT (intr_get_level () == INTR_ON);
    * while (timer_elapsed (start) < ticks) 
    * thread_yield ();
    */
   
+  ASSERT (intr_get_level () == INTR_ON);
+  //disable intrupts, to be sure that the thread can block itself
+  enum intr_level old_level = intr_disable ();
+  //set the ticks in a thread-local variable
+  thread_current()->ticks_to_sleep = ticks;
+  //block thread to start sleeping
   thread_block();
+  //set the old interrupt level again
+  intr_set_level (old_level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -178,9 +186,8 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
   
-  enum intr_level old_level = intr_disable ();
+  //at each interrupt every thread has to be checked, if its ticks_to_sleep variable is 0 and if wake the thread up
   thread_foreach (wake_up_thread, 0);
-  intr_set_level (old_level);
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -254,9 +261,17 @@ real_time_delay (int64_t num, int32_t denom)
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
 
-static void wake_up_thread(thread t, void *aux) {
-  if(t.state == THREAD_BLOCKED && t.ticks_to_sleep == 0) {
-    thread_unblock(t);
+/* Checks a single thread for its ticks_to_sleep value. Decrease it and unblock the thread, if sleeping time is over. */
+static void 
+wake_up_thread(struct thread *t, void *aux) 
+{
+  if(t->status == THREAD_BLOCKED) {
+    if(t->ticks_to_sleep > 0) {
+      t->ticks_to_sleep--;
+      if(t->ticks_to_sleep == 0) {
+	thread_unblock(t);
+      }
+    }
   }
 }
 
