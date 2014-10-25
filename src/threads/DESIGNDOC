@@ -29,21 +29,39 @@ Mario Preishuber <mario.preishuber@stud.sbg.ac.at>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+New thread local variable:
+    - uint64_t ticks_to_sleep;		
+Holds the number of ticks that the thread has to sleep.
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe what happens in a call to timer_sleep(),
 >> including the effects of the timer interrupt handler.
 
+At first we have to disable the interrupts, so that we can assure that 
+the thread will be blocked. But before we have to save the old 
+interrupt-level because we have to set it again after wake up. The number 
+of ticks are stored for each thread in a thread-local variable and then 
+the thread will be blocked. After the waking up, the thread sets its old 
+interrupt-level again.
+
+
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
+
+//TODO: implement a blocked-list
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
+
+
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
+
+Disable interrupts while calling timer_sleep().
 
 ---- RATIONALE ----
 
