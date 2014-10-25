@@ -578,7 +578,21 @@ allocate_tid (void)
 
   return tid;
 }
-
+
+/* pseudOS: Checks a single thread for its ticks_to_sleep value. Decrease it and unblock the thread, if sleeping time is over. */
+void 
+thread_wake_up (struct thread *t, void *aux) 
+{
+  if(t->status == THREAD_BLOCKED && t->ticks_to_sleep > 0) 
+  {
+    t->ticks_to_sleep--;
+    if(t->ticks_to_sleep == 0) 
+    {
+      thread_unblock(t);
+    }
+  }
+}
+
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
