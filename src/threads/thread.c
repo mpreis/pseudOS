@@ -356,12 +356,14 @@ thread_foreach_ready (thread_action_func *func, void *aux)
 
   ASSERT (intr_get_level () == INTR_OFF);
 
+  printf(" --- READY LIST tid (priority):  ");
   for (e = list_begin (&ready_list); e != list_end (&ready_list);
        e = list_next (e))
     {
-      struct thread *t = list_entry (e, struct thread, allelem);
+      struct thread *t = list_entry (e, struct thread, elem);
       func (t, aux);
     }
+  printf("\n");
 }
 
 /* pseudOS: Print thread tid and priority */
