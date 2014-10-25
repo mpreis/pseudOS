@@ -71,6 +71,13 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+// pseudOS
+static void thread_foreach_ready (thread_action_func *func, void *aux);
+static void printTidPriority (struct thread *t, void *aux UNUSED);
+static bool thread_priority_less (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+
+
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -237,8 +244,14 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  // pseudOS
+  list_insert_ordered(&ready_list, &t->elem, thread_priority_less, NULL);
+  //list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
+  
+  /* pseudOS: print ready_list */
+  thread_foreach_ready (printTidPriority, NULL);
+  
   intr_set_level (old_level);
 }
 
@@ -307,8 +320,11 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+  if (cur != idle_thread) {
+    // pseudOS
+    list_insert_ordered(&ready_list, &cur->elem, thread_priority_less, NULL);
+    //list_push_back (&ready_list, &cur->elem);
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -329,6 +345,30 @@ thread_foreach (thread_action_func *func, void *aux)
       struct thread *t = list_entry (e, struct thread, allelem);
       func (t, aux);
     }
+}
+
+/* pseudOS: Invoke function 'func' on all ready threads, passing along 'aux'.
+   This function must be called with interrupts off. */
+static void
+thread_foreach_ready (thread_action_func *func, void *aux)
+{
+  struct list_elem *e;
+
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  for (e = list_begin (&ready_list); e != list_end (&ready_list);
+       e = list_next (e))
+    {
+      struct thread *t = list_entry (e, struct thread, allelem);
+      func (t, aux);
+    }
+}
+
+/* pseudOS: Print thread tid and priority */
+static void 
+printTidPriority (struct thread *t, void *aux UNUSED)
+{
+  printf("%d (%d) ", t->tid, t->priority);
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -581,7 +621,7 @@ allocate_tid (void)
 
 /* pseudOS: Checks a single thread for its ticks_to_sleep value. Decrease it and unblock the thread, if sleeping time is over. */
 void 
-thread_wake_up (struct thread *t, void *aux) 
+thread_wake_up (struct thread *t, void *aux UNUSED) 
 {
   if(t->status == THREAD_BLOCKED && t->ticks_to_sleep > 0) 
   {
@@ -591,6 +631,17 @@ thread_wake_up (struct thread *t, void *aux)
       thread_unblock(t);
     }
   }
+}
+
+/* pseudOS: Returns true if value A is less than value B, false
+   otherwise. */
+static bool
+thread_priority_less (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->priority < b->priority;
 }
 
 /* Offset of `stack' member within `struct thread'.
