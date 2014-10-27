@@ -74,9 +74,6 @@ static tid_t allocate_tid (void);
 // pseudOS
 static void thread_foreach_ready (thread_action_func *func, void *aux);
 static void printTidPriority (struct thread *t, void *aux UNUSED);
-static bool thread_priority_less (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
-
-
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -245,12 +242,12 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   // pseudOS
-  list_insert_ordered(&ready_list, &t->elem, thread_priority_less, NULL);
+  list_insert_ordered(&ready_list, &t->elem, thread_priority_leq, NULL);
   //list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   
   /* pseudOS: print ready_list */
-  thread_foreach_ready (printTidPriority, NULL);
+  //thread_foreach_ready (printTidPriority, NULL);
   
   intr_set_level (old_level);
 }
@@ -322,7 +319,7 @@ thread_yield (void)
   old_level = intr_disable ();
   if (cur != idle_thread) {
     // pseudOS
-    list_insert_ordered(&ready_list, &cur->elem, thread_priority_less, NULL);
+    list_insert_ordered(&ready_list, &cur->elem, thread_priority_leq, NULL);
     //list_push_back (&ready_list, &cur->elem);
   }
   cur->status = THREAD_READY;
@@ -377,7 +374,16 @@ printTidPriority (struct thread *t, void *aux UNUSED)
 void
 thread_set_priority (int new_priority) 
 {
+  ASSERT (intr_get_level () == INTR_ON);
+  
+  enum intr_level old_level;
+  old_level = intr_disable();
+  
+  ASSERT (intr_get_level () == INTR_OFF);
+  
   thread_current ()->priority = new_priority;
+  
+  intr_set_level (old_level);
 }
 
 /* Returns the current thread's priority. */
@@ -535,7 +541,7 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+    return list_entry (list_pop_back (&ready_list), struct thread, elem);
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -629,21 +635,19 @@ thread_wake_up (struct thread *t, void *aux UNUSED)
   {
     t->ticks_to_sleep--;
     if(t->ticks_to_sleep == 0) 
-    {
       thread_unblock(t);
-    }
   }
 }
 
 /* pseudOS: Returns true if value A is less than value B, false
    otherwise. */
-static bool
-thread_priority_less (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED) 
+bool
+thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED) 
 {
   const struct thread *a = list_entry (a_, struct thread, elem);
   const struct thread *b = list_entry (b_, struct thread, elem);
   
-  return a->priority < b->priority;
+  return a->priority <= b->priority;
 }
 
 /* Offset of `stack' member within `struct thread'.

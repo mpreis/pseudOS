@@ -97,15 +97,21 @@ timer_sleep (int64_t ticks)
    * thread_yield ();
    */
   
-  ASSERT (intr_get_level () == INTR_ON);
-  //disable intrupts, to be sure that the thread can block itself
-  enum intr_level old_level = intr_disable ();
-  //set the ticks in a thread-local variable
-  thread_current()->ticks_to_sleep = ticks;
-  //block thread to start sleeping
-  thread_block();
-  //set the old interrupt level again
-  intr_set_level (old_level);
+  //printf(" --- ticks: %d\n", ticks);
+  // pseudOS
+  if(ticks > 0)
+  {
+    ASSERT (intr_get_level () == INTR_ON);
+  
+    //disable intrupts, to be sure that the thread can block itself
+    enum intr_level old_level = intr_disable ();
+    //set the ticks in a thread-local variable
+    thread_current()->ticks_to_sleep = ticks;
+    //block thread to start sleeping
+    thread_block();
+    //set the old interrupt level again
+    intr_set_level (old_level);   
+  }
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
