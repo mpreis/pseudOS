@@ -83,20 +83,93 @@ While choosing a uint64_t for the ticks is pretty obvious, we consider that a li
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Extensions of struct thread in thread.h:
+  - struct list donations
+    This list holds all donations of the thread.
+    
+  - struct list_elem donelem
+    Element of the donation list.
+    
+  - struct lock *wanted_lock
+    Thread is waiting for this lock.
+    
+New #define in thread.c:
+  - #define MAX_DEPTH 8
+    Represents the maximum detph of nested donation 
+    (default = 8 as described in the documentation).
+
 >> B2: Explain the data structure used to track priority donation.
 >> Use ASCII art to diagram a nested donation.  (Alternately, submit a
 >> .png file.)
+
+Threads:
+  TL ... A thread with low priority.
+  TM ... A thread with medium priority.
+  TH ... A thread widh high priority.
+  
+Locks: L1, L2
+
+Current state:
+  TL holds the lock of L1
+  TM holds the lock of L2
+  
+  TM needs to lock L1
+  TH needs to lock L2
+  
+  
+Diagram:
+
++--- TH ----------+   +--- TM ---------------+   +--- TL ---------------+
+| priority: TH1   |   | priority: max{TH,TM} |   | priority: max{TL,TM} |
+| wanted_lock: L2 |-->| wanted_lock: L1      |-->| wanted_lock: NULL    |
+| donations: NULL |   | donations: TH        |   | donations: TM        |
++-----------------+   +----------------------+   +----------------------+
+
+L1:
+ + holder: TL
+ + waiters: TM
+
+L2:
+ + holder: TM
+ + waiters: TH
+
 
 ---- ALGORITHMS ----
 
 >> B3: How do you ensure that the highest priority thread waiting for
 >> a lock, semaphore, or condition variable wakes up first?
 
+If a lock is released, it is checked if there are any waiting threads.
+Is a thread waiting, we sort the list of waiters and unblock the thread
+with the highest priority.
+
 >> B4: Describe the sequence of events when a call to lock_acquire()
 >> causes a priority donation.  How is nested donation handled?
 
+After calling lock_acquire we check if a thread holds the needed lock.
+
+Is another thread (=holder) holding the lock, the variable wanted_lock 
+of the current thread ist set to LOCK. Furthermore, the current thread 
+adds a donation to the donations-list of the thread which holds the LOCK.
+The priority of the holder is not changed yet.
+
+The next step calls sema_down. Is the LOCK not available the method
+thread_donate_priority is called. Now the lock holders priority is 
+updated (also nested). The currrent thread adds itself to the 
+waiters list of the lock and blocks.
+
+If the thread gets the lock, it sets itself as holder and sets the 
+wanted_lock variable to NULL.
+
 >> B5: Describe the sequence of events when lock_release() is called
 >> on a lock that a higher-priority thread is waiting for.
+
+After calling lock_release the holder of the lock is set to NULL. 
+The next step is to lookup for a donation and remove it. Then 
+sema_up is called which checks the list of waiters. Are threads
+waiting they get sorted. The thread with the highest priority
+is unblocked. The last step is to execute thread_priority_check,
+to check if there is a thread with a higher priority.
 
 ---- SYNCHRONIZATION ----
 
@@ -104,10 +177,23 @@ While choosing a uint64_t for the ticks is pretty obvious, we consider that a li
 >> how your implementation avoids it.  Can you use a lock to avoid
 >> this race?
 
+Race conditions can occur while reading or writing the priority of
+the current thread. We avoid this be disabling interrupts.
+
 ---- RATIONALE ----
 
 >> B7: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+We wanted to use as much as possible of the existing code. Furthermore,
+we tried to keep our code simple. For example we use the existing 
+implementation of list to realise multiple donations.
+
+In the first version we used a global list of all locks. But during 
+implementing priority donation we changed our concept. The most significant 
+reasen therefor was, that it is much easier to implement priority donation 
+if each thread knows the lock it is waiting for.
+
 
 			  ADVANCED SCHEDULER
 			  ==================
