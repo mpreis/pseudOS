@@ -106,6 +106,8 @@ struct thread
     struct list donations;		/* pseudOS: list of donations */
     struct list_elem donelem;		/* pseudOS: element of the donation list */
     struct lock *wanted_lock;		/* pseudOS: lock needed by this thread */
+    int niceness; 			/* Nice value of a thread. */
+    int recent_cpu; 			/* How much time recieved this thread recently. */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -152,6 +154,10 @@ void thread_donate_priority(void);
 void thread_remove_donation (struct lock *lock);
 void thread_update_priority (void);
 void thread_priority_check (void);
+void thread_calculate_priority (struct thread *t);
+void thread_calculate_recent_cpu (struct thread *t);
+void thread_calculate_load_avg (void);
+void thread_update_mlfqs_properties (void);
 
 
 #endif /* threads/thread.h */

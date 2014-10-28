@@ -11,6 +11,7 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/fixed-point.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -56,6 +57,8 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
+int load_avg;			/* pseudOS: average load */
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -100,6 +103,7 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  load_avg = 0;			/* pseudOS: init with 0 */
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -210,6 +214,8 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  
+  
   intr_set_level (old_level);
   
   /* Add to run queue. */
@@ -217,7 +223,7 @@ thread_create (const char *name, int priority,
   
   /* pseudOS */
   old_level = intr_disable ();
-  thread_priority_check ();	// pseudOS: check if there is a thread with a higher prioirty
+  thread_priority_check ();	// pseudOS: check if there is a thread with a higher priority
   intr_set_level (old_level);
   
   return tid;
@@ -387,6 +393,7 @@ printTidPriority (struct thread *t, void *aux UNUSED)
 void
 thread_set_priority (int new_priority) 
 {
+  if(thread_mlfqs) return;				// pseudOS: ignore set priority 
   ASSERT (intr_get_level () == INTR_ON);
   
   enum intr_level old_level = intr_disable();
@@ -410,35 +417,36 @@ thread_get_priority (void)
   return thread_current ()->priority;
 }
 
-/* Sets the current thread's nice value to NICE. */
+/* pseudOS: the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice UNUSED) 
 {
-  /* Not yet implemented. */
+  enum intr_level old_level = intr_disable ();
+  thread_current ()->niceness = nice;
+  thread_calculate_priority (thread_current ());
+  thread_priority_check ();
+  intr_set_level (old_level);
 }
 
-/* Returns the current thread's nice value. */
+/* pseudOS: the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return thread_current ()->niceness;
 }
 
-/* Returns 100 times the system load average. */
+/* pseudOS: Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return convert_fp_to_int_rtn (mul_fp_and_int (load_avg, 100));
 }
 
-/* Returns 100 times the current thread's recent_cpu value. */
+/* pseudOS: Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  return convert_fp_to_int_rtn (mul_fp_and_int (thread_current ()->recent_cpu, 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -536,6 +544,9 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->donations);	/* pseudOS */
   t->wanted_lock = NULL;	/* pseudOS */
   t->init_priority = priority;	/* pseudOS */
+  
+  t->niceness = 0;		/* pseudOS */
+  t->recent_cpu = 0;		/* pseudOS */
  
   intr_set_level (old_level);
 }
@@ -750,3 +761,72 @@ thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, voi
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+
+
+/* 
+ * pseudOS: MLFQS needs to calculate the priority after setting
+ * a new nice value. 
+ */
+void
+thread_calculate_priority (struct thread *t) 
+{
+  // Formular: priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
+  int priority = sub_fp (convert_int_to_fp (PRI_MAX), add_fp (div_fp_and_int (t->recent_cpu, 4), mul_fp_and_int (t->niceness, 2)));
+  
+  if(priority < PRI_MIN) t->recent_cpu = PRI_MIN;
+  else if(priority > PRI_MAX) t->recent_cpu = PRI_MAX;
+  else t->recent_cpu = priority;
+}
+
+/* 
+ * pseudOS: (MLFQS) Calculates how much CPU time a process has received 
+ * "recently" based on an exponentially weighted moving average. 
+ */
+void
+thread_calculate_recent_cpu (struct thread *t) 
+{
+  // Formular: recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice
+  // As recommended in the documentation calculate coefficient first
+  int coefficient = div_fp (mul_fp_and_int (load_avg, 2), add_fp_and_int (mul_fp_and_int (load_avg, 2), 1));
+  
+  t->recent_cpu = add_fp_and_int (mul_fp (coefficient, t->recent_cpu), t->niceness);
+}
+
+/* 
+ * pseudOS: (MLFQS) Calculates new load average based on an 
+ * exponentially weighted moving average. 
+ */
+void
+thread_calculate_load_avg (void) 
+{
+  /* ready_threads is the number of threads that are either running or ready to run at time of update (not including the idle thread) */
+  int ready_threads = list_size(&ready_list);
+  if(thread_current () != idle_thread) ready_threads++;
+    
+  // Formular: load_avg = (59/60)*load_avg + (1/60)*ready_threads
+  load_avg = add_fp (mul_fp (div_fp_and_int (convert_int_to_fp (59), 60), load_avg), mul_fp (div_fp_and_int (convert_int_to_fp (1), 60), ready_threads));
+}
+
+
+/* 
+ * pseudOS: (MLFQS) Calculates new load average based on an 
+ * exponentially weighted moving average. 
+ */
+void
+thread_update_mlfqs_properties (void) 
+{
+  struct list_elem *e = list_begin(&all_list);
+  struct thread *t;
+  
+  while(e != list_end(&all_list)) 
+  {
+    t = list_entry (e, struct thread, allelem);
+    thread_calculate_recent_cpu (t);
+    thread_calculate_priority (t);
+    e = list_next(e);
+  }
+}
+
+
+

@@ -198,11 +198,25 @@ timer_interrupt (struct intr_frame *args UNUSED)
   ticks++;
   thread_tick ();
   ASSERT (intr_get_level () == INTR_OFF);
-
+  
+  /* pseudOS: recent_cpu, priority and load_avg have to be updated every multiple of a second */
+  if(thread_mlfqs) 
+  {
+    if(timer_ticks () % TIMER_FREQ == 0)
+    {
+      thread_calculate_load_avg ();
+       
+      // pseudOS: recalc recent_cpu and recalc priority
+      thread_update_mlfqs_properties ();
+    }
+  }
+  
   /* pseudOS: check all threads in the blocked_list if they have to wake up */
+  
   struct list_elem *e = list_begin(&blocked_list);
   struct list_elem *next;
   struct thread *t;
+  
   while(e != list_end(&blocked_list)) 
   {
     t = list_entry (e, struct thread, elem);
