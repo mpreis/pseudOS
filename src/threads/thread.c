@@ -735,23 +735,6 @@ thread_priority_check (void)
 }
 
 /* 
- * pseudOS: Checks a single thread for its ticks_to_sleep value. 
- * Decrease it and unblock the thread, if sleeping time is over. 
- */
-void 
-thread_wake_up (struct thread *t, void *aux UNUSED) 
-{
-  ASSERT (intr_get_level () == INTR_OFF);
-  
-  if(t->status == THREAD_BLOCKED && t->ticks_to_sleep > 0) 
-  {
-    t->ticks_to_sleep--;
-    if(t->ticks_to_sleep == 0) 
-      thread_unblock(t);
-  }
-}
-
-/* 
  * pseudOS: Returns true if value A is less or equal than value B, false
  * otherwise. 
  */

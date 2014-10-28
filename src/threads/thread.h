@@ -147,7 +147,6 @@ int thread_get_load_avg (void);
 /* 
  * pseudOS: public functions 
  */
-void thread_wake_up (struct thread *t, void *aux UNUSED); 
 bool thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 void thread_donate_priority(void);
 void thread_remove_donation (struct lock *lock);
