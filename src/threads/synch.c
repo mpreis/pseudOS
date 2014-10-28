@@ -216,9 +216,12 @@ lock_acquire (struct lock *lock)
   {
     // pseudOS: lock is already holded; add holders priority to donations
     thread_current ()->wanted_lock = lock;
-    list_insert_ordered (&lock->holder->donations, 
+    if(!thread_mlfqs)
+    {
+      list_insert_ordered (&lock->holder->donations, 
 		       &thread_current ()->donelem, 
 		       thread_priority_leq, NULL);
+    }
   }
   
   sema_down (&lock->semaphore);

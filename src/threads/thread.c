@@ -57,7 +57,7 @@ static long long user_ticks;    /* # of timer ticks in user programs. */
 #define TIME_SLICE 4            /* # of timer ticks to give each thread. */
 static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 
-int load_avg;			/* pseudOS: average load */
+static int load_avg;			/* pseudOS: average load */
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -103,7 +103,6 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
-  load_avg = 0;			/* pseudOS: init with 0 */
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -121,7 +120,10 @@ thread_start (void)
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
-
+  
+  load_avg = 0;			/* pseudOS: init with 0 */
+  printf(" --- thread_start \n");
+  
   /* Start preemptive thread scheduling. */
   intr_enable ();
 
@@ -214,8 +216,6 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
-  
-  
   intr_set_level (old_level);
   
   /* Add to run queue. */
@@ -439,7 +439,10 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  return convert_fp_to_int_rtn (mul_fp_and_int (load_avg, 100));
+  enum intr_level old_level = intr_disable ();
+  int la = convert_fp_to_int_rtn (mul_fp_and_int (load_avg, 100));
+  intr_set_level (old_level);
+  return la;
 }
 
 /* pseudOS: Returns 100 times the current thread's recent_cpu value. */
@@ -667,6 +670,8 @@ allocate_tid (void)
 void 
 thread_donate_priority (void)
 {
+  if(thread_mlfqs) return;	// pseudOS: ignore priority donation
+  
   struct thread *t = thread_current ();
   struct lock *l = t->wanted_lock;
   
@@ -690,6 +695,8 @@ thread_donate_priority (void)
 void 
 thread_update_priority (void)
 {
+  if(thread_mlfqs) return;	// pseudOS: ignore 
+  
   struct thread *t = thread_current ();
   t->priority = t->init_priority;
   
@@ -708,6 +715,8 @@ thread_update_priority (void)
 void
 thread_remove_donation (struct lock *lock)
 {
+  if(thread_mlfqs) return;		// pseudOS: ignore 
+  
   struct list_elem *next;
   struct list_elem *e = list_begin (&thread_current ()->donations);
   
@@ -730,6 +739,8 @@ thread_remove_donation (struct lock *lock)
 void
 thread_priority_check (void)
 {
+  if(thread_mlfqs) return;	// pseudOS: ignore 
+  
   if(! list_empty(&ready_list))
   {
     struct thread *t_max = list_entry (list_back (&ready_list), struct thread, elem);
@@ -772,7 +783,9 @@ void
 thread_calculate_priority (struct thread *t) 
 {
   // Formular: priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
-  int priority = sub_fp (convert_int_to_fp (PRI_MAX), add_fp (div_fp_and_int (t->recent_cpu, 4), mul_fp_and_int (t->niceness, 2)));
+  int priority = sub_fp (
+    convert_int_to_fp (PRI_MAX), 
+    add_fp (div_fp_and_int (t->recent_cpu, 4), mul_fp_and_int (convert_int_to_fp(t->niceness), 2)));
   
   if(priority < PRI_MIN) t->recent_cpu = PRI_MIN;
   else if(priority > PRI_MAX) t->recent_cpu = PRI_MAX;
@@ -802,10 +815,15 @@ thread_calculate_load_avg (void)
 {
   /* ready_threads is the number of threads that are either running or ready to run at time of update (not including the idle thread) */
   int ready_threads = list_size(&ready_list);
-  if(thread_current () != idle_thread) ready_threads++;
-    
+   
   // Formular: load_avg = (59/60)*load_avg + (1/60)*ready_threads
-  load_avg = add_fp (mul_fp (div_fp_and_int (convert_int_to_fp (59), 60), load_avg), mul_fp (div_fp_and_int (convert_int_to_fp (1), 60), ready_threads));
+  int32_t term1 = div_fp (convert_int_to_fp (59), convert_int_to_fp(60));
+  int32_t term2 = mul_fp (term1, load_avg);
+  int32_t term3 = div_fp (convert_int_to_fp (1), convert_int_to_fp(60));
+  int32_t term4 = mul_fp_and_int (term3, ready_threads);
+  load_avg = add_fp (term2,term4);
+  
+  ASSERT(load_avg >= 0);
 }
 
 
