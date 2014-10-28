@@ -71,9 +71,12 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-// pseudOS
+/*
+ * pseudOS: static functions
+ */
 static void thread_foreach_ready (thread_action_func *func, void *aux);
 static void printTidPriority (struct thread *t, void *aux UNUSED);
+static void thread_priority_check (void);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -109,7 +112,8 @@ thread_init (void)
 void
 thread_start (void) 
 {
-  /* Create the idle thread. */
+  /* Create the 
+   *idle thread. */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
@@ -204,7 +208,10 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-
+  
+  // psuedOS
+  thread_priority_check ();
+  
   return tid;
 }
 
@@ -241,9 +248,9 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  // pseudOS
+  // pseudOS: element with highest priority is at the end of the list
+  // /* origin */ list_push_back (&ready_list, &t->elem);
   list_insert_ordered(&ready_list, &t->elem, thread_priority_leq, NULL);
-  //list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   
   /* pseudOS: print ready_list */
@@ -318,9 +325,9 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) {
-    // pseudOS
+    // pseudOS: element with highest priority is at the end of the list
+    // /* origin */ list_push_back (&ready_list, &cur->elem);
     list_insert_ordered(&ready_list, &cur->elem, thread_priority_leq, NULL);
-    //list_push_back (&ready_list, &cur->elem);
   }
   cur->status = THREAD_READY;
   schedule ();
@@ -363,7 +370,9 @@ thread_foreach_ready (thread_action_func *func, void *aux)
   printf("\n");
 }
 
-/* pseudOS: Print thread tid and priority */
+/* 
+ * pseudOS: Print thread tid and priority 
+ */
 static void 
 printTidPriority (struct thread *t, void *aux UNUSED)
 {
@@ -382,6 +391,7 @@ thread_set_priority (int new_priority)
   ASSERT (intr_get_level () == INTR_OFF);
   
   thread_current ()->priority = new_priority;
+  thread_priority_check();
   
   intr_set_level (old_level);
 }
@@ -627,7 +637,29 @@ allocate_tid (void)
   return tid;
 }
 
-/* pseudOS: Checks a single thread for its ticks_to_sleep value. Decrease it and unblock the thread, if sleeping time is over. */
+/* 
+ * pseudOS: Compares the priority of the current thread with the max. priority of a threads 
+ * in the ready list. Is the proirity of the current thread less than the other one, the
+ * current thready is yield.
+ */
+static void
+thread_priority_check (void)
+{
+  if(! list_empty(&ready_list))
+  {
+    struct thread *t_max = list_entry (list_back (&ready_list), struct thread, elem);
+    if(thread_current ()->priority < t_max->priority && thread_current () != idle_thread)
+      if(intr_context()) 
+	intr_yield_on_return ();
+      else 
+	thread_yield();
+  }
+}
+
+/* 
+ * pseudOS: Checks a single thread for its ticks_to_sleep value. 
+ * Decrease it and unblock the thread, if sleeping time is over. 
+ */
 void 
 thread_wake_up (struct thread *t, void *aux UNUSED) 
 {
@@ -639,8 +671,10 @@ thread_wake_up (struct thread *t, void *aux UNUSED)
   }
 }
 
-/* pseudOS: Returns true if value A is less than value B, false
-   otherwise. */
+/* 
+ * pseudOS: Returns true if value A is less than value B, false
+ * otherwise. 
+ */
 bool
 thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED) 
 {
