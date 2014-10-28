@@ -20,6 +20,9 @@
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
+/* pseudOS: Holds all blocked threads. Needed to minimize the time spent in timer_interrupt(), because it is not necessary to interate over all threads anymore. */
+static struct list blocked_list;
+
 /* Number of loops per timer tick.
    Initialized by timer_calibrate(). */
 static unsigned loops_per_tick;
@@ -29,6 +32,7 @@ static bool too_many_loops (unsigned loops);
 static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
+static bool thread_ticks_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
@@ -37,6 +41,8 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
+  // pseudOS
+  list_init (&blocked_list);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -97,18 +103,21 @@ timer_sleep (int64_t ticks)
    * thread_yield ();
    */
   
-  //printf(" --- ticks: %d\n", ticks);
-  // pseudOS
-  ASSERT (intr_get_level () == INTR_ON);
-  
-  //disable intrupts, to be sure that the thread can block itself
-  enum intr_level old_level = intr_disable ();
+  // pseudOS: Only positive numbers makes sense for timer_sleep()
   if(ticks > 0)
   {
-    //set the ticks in a thread-local variable
-    thread_current()->ticks_to_sleep = ticks;
-    //block thread to start sleeping
-    thread_block();
+    ASSERT (intr_get_level () == INTR_ON);
+  
+    // disable intrupts, to be sure that the thread can block itself
+    enum intr_level old_level = intr_disable ();
+    // set the ticks in a thread-local variable
+    thread_current ()->ticks_to_sleep = ticks;
+    // insert thread in sorted blocked list
+    list_insert_ordered (&blocked_list, &thread_current ()->elem, thread_ticks_leq, NULL);
+    // block thread to start sleeping
+    thread_block ();
+    // set the old interrupt level again
+    intr_set_level (old_level);
   }
   //set the old interrupt level again
   intr_set_level (old_level);   
@@ -183,16 +192,34 @@ timer_print_stats (void)
 {
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
-  
-  // pseudOS: At each interrupt every thread has to be checked, if its ticks_to_sleep variable is 0 and if wake the thread up
-  thread_foreach (thread_wake_up, 0);
+  ASSERT (intr_get_level () == INTR_OFF);
+
+  /* pseudOS: check all threads in the blocked_list if they have to wake up */
+  struct list_elem *e = list_begin(&blocked_list);
+  struct list_elem *next;
+  struct thread *t;
+  while(e != list_end(&blocked_list)) 
+  {
+    t = list_entry (e, struct thread, elem);
+    next = list_next(e);
+    if(t->ticks_to_sleep > 0) 
+    {
+      t->ticks_to_sleep--;
+      if(t->ticks_to_sleep == 0) 
+      {
+	list_remove(e);
+	thread_unblock(t);
+      }
+    }
+    e = next;
+  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -266,3 +293,13 @@ real_time_delay (int64_t num, int32_t denom)
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
 }
 
+/* pseudOS: Returns true if value A is less than value B, false
+   otherwise. */
+static bool
+thread_ticks_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED) 
+{
+  const struct thread *a = list_entry (a_, struct thread, elem);
+  const struct thread *b = list_entry (b_, struct thread, elem);
+  
+  return a->ticks_to_sleep < b->ticks_to_sleep;
+}

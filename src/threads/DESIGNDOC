@@ -30,8 +30,11 @@ Mario Preishuber <mario.preishuber@stud.sbg.ac.at>
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
 New thread local variable:
-    - uint64_t ticks_to_sleep;		
+    - uint64_t ticks_to_sleep;
 Holds the number of ticks that the thread has to sleep.
+
+To reduce the time spent in timer_interrupt () we have implemented a blocked_list, which is a static global variable in timer.c.
+    - static struct list blocked_list;
 
 ---- ALGORITHMS ----
 
@@ -49,24 +52,27 @@ interrupt-level again.
 >> A3: What steps are taken to minimize the amount of time spent in
 >> the timer interrupt handler?
 
-//TODO: implement a blocked-list
+As mentioned in A1, we have implemented a list that holds only blocked threads. Due to this, we do not have to iterate over all threads in every timer_interrupt. 
 
 ---- SYNCHRONIZATION ----
 
 >> A4: How are race conditions avoided when multiple threads call
 >> timer_sleep() simultaneously?
 
-
+To avoid any race conditions, we decided to disable all interrupts during the timer_sleep () method. So, setting the number of ticks, insert it in the blocked_list and blocking the current thread will not get interrupted. 
 
 >> A5: How are race conditions avoided when a timer interrupt occurs
 >> during a call to timer_sleep()?
 
-Disable interrupts while calling timer_sleep().
+Answer like in A4.
 
 ---- RATIONALE ----
 
 >> A6: Why did you choose this design?  In what ways is it superior to
 >> another design you considered?
+
+While choosing a uint64_t for the ticks is pretty obvious, we consider that a list is the perfect datastructe for collecting all blocked threads. Lists are already used for all threads and all ready threads, furthermore they are well implemented by Pintos itself.
+
 
 			 PRIORITY SCHEDULING
 			 ===================
