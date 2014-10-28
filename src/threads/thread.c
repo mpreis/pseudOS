@@ -20,6 +20,8 @@
    of thread.h for details. */
 #define THREAD_MAGIC 0xcd6abf4b
 
+#define MAX_DEPTH 8
+
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
@@ -76,7 +78,6 @@ static tid_t allocate_tid (void);
  */
 static void thread_foreach_ready (thread_action_func *func, void *aux);
 static void printTidPriority (struct thread *t, void *aux UNUSED);
-static void thread_priority_check (void);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -112,8 +113,7 @@ thread_init (void)
 void
 thread_start (void) 
 {
-  /* Create the 
-   *idle thread. */
+  /* Create the idle thread. */
   struct semaphore idle_started;
   sema_init (&idle_started, 0);
   thread_create ("idle", PRI_MIN, idle, &idle_started);
@@ -179,6 +179,8 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
+  
+  enum intr_level old_level;
 
   ASSERT (function != NULL);
 
@@ -191,6 +193,8 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  old_level = intr_disable ();
+  
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -206,11 +210,15 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  intr_set_level (old_level);
+  
   /* Add to run queue. */
   thread_unblock (t);
   
-  // psuedOS
-  thread_priority_check ();
+  /* pseudOS */
+  old_level = intr_disable ();
+  thread_priority_check ();	// pseudOS: check if there is a thread with a higher prioirty
+  intr_set_level (old_level);
   
   return tid;
 }
@@ -249,12 +257,8 @@ thread_unblock (struct thread *t)
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
   // pseudOS: element with highest priority is at the end of the list
-  // /* origin */ list_push_back (&ready_list, &t->elem);
   list_insert_ordered(&ready_list, &t->elem, thread_priority_leq, NULL);
   t->status = THREAD_READY;
-  
-  /* pseudOS: print ready_list */
-  //thread_foreach_ready (printTidPriority, NULL);
   
   intr_set_level (old_level);
 }
@@ -324,9 +328,9 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) {
+  if (cur != idle_thread) 
+  {
     // pseudOS: element with highest priority is at the end of the list
-    // /* origin */ list_push_back (&ready_list, &cur->elem);
     list_insert_ordered(&ready_list, &cur->elem, thread_priority_leq, NULL);
   }
   cur->status = THREAD_READY;
@@ -385,16 +389,19 @@ thread_set_priority (int new_priority)
 {
   ASSERT (intr_get_level () == INTR_ON);
   
-  enum intr_level old_level;
-  old_level = intr_disable();
+  enum intr_level old_level = intr_disable();
   
-  ASSERT (intr_get_level () == INTR_OFF);
+  /* pseudOS  */
+  int old_priority = thread_current ()->priority;	// pseudOS: backup current priority
+  thread_current ()->init_priority = new_priority;	// pseudOS: replace initial priority by the new 
+  thread_update_priority ();				// pseudOS: check donations and set highest priority
   
-  thread_current ()->priority = new_priority;
-  thread_priority_check();
+  if(old_priority > thread_current ()->priority)	// pseudOS: if priority decreases, check if there is
+    thread_priority_check();				// a thread with a higher prioirty.
   
   intr_set_level (old_level);
 }
+
 
 /* Returns the current thread's priority. */
 int
@@ -433,7 +440,7 @@ thread_get_recent_cpu (void)
   /* Not yet implemented. */
   return 0;
 }
-
+
 /* Idle thread.  Executes when no other thread is ready to run.
 
    The idle thread is initially put on the ready list by
@@ -482,7 +489,7 @@ kernel_thread (thread_func *function, void *aux)
   function (aux);       /* Execute the thread function. */
   thread_exit ();       /* If function() returns, kill the thread. */
 }
-
+
 /* Returns the running thread. */
 struct thread *
 running_thread (void) 
@@ -515,6 +522,8 @@ init_thread (struct thread *t, const char *name, int priority)
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
 
+  old_level = intr_disable ();
+  
   memset (t, 0, sizeof *t);
   t->status = THREAD_BLOCKED;
   strlcpy (t->name, name, sizeof t->name);
@@ -522,8 +531,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
+  
+  list_init(&t->donations);	/* pseudOS */
+  t->wanted_lock = NULL;	/* pseudOS */
+  t->init_priority = priority;	/* pseudOS */
+ 
   intr_set_level (old_level);
 }
 
@@ -551,9 +564,8 @@ next_thread_to_run (void)
   if (list_empty (&ready_list))
     return idle_thread;
   else
-    return list_entry (list_pop_back (&ready_list), struct thread, elem);
+    return list_entry (list_pop_back (&ready_list), struct thread, elem); /* pseudOS: front -> back */
 }
-
 /* Completes a thread switch by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
 
@@ -613,7 +625,7 @@ schedule (void)
   struct thread *cur = running_thread ();
   struct thread *next = next_thread_to_run ();
   struct thread *prev = NULL;
-
+  
   ASSERT (intr_get_level () == INTR_OFF);
   ASSERT (cur->status != THREAD_RUNNING);
   ASSERT (is_thread (next));
@@ -637,22 +649,88 @@ allocate_tid (void)
   return tid;
 }
 
+
+/* pseudOS: Donate the holder of the needed lock with the priority of the 
+ * current thread. Handle also nested donation.
+ */
+void 
+thread_donate_priority (void)
+{
+  struct thread *t = thread_current ();
+  struct lock *l = t->wanted_lock;
+  
+  int i;
+  for(i = 0; i < MAX_DEPTH && l; i++)
+  {
+    if(! l->holder) 
+      return;
+    if(l->holder->priority >= t->priority) 
+      return;
+    l->holder->priority = t->priority;
+    t = l->holder;
+    l = t->wanted_lock;
+  }
+}
+
+/* pseudOS: Checks if there is a donation with a higher priority 
+ * as the initial priority of the current thread 
+ * (and changes the priority). 
+ */
+void 
+thread_update_priority (void)
+{
+  struct thread *t = thread_current ();
+  t->priority = t->init_priority;
+  
+  if(! list_empty (&t->donations))
+  {
+    struct thread *t_max_donation = list_entry (list_back (&t->donations),
+						struct thread, donelem);
+    if(t_max_donation->priority > t->priority)
+      t->priority = t_max_donation->priority;
+  }
+}
+
+/* pseudOS: After releasing LOCK we have to check if the thread got a donation,
+ * in this case we remove the donation of the list and update threads priority.
+ */
+void
+thread_remove_donation (struct lock *lock)
+{
+  struct list_elem *next;
+  struct list_elem *e = list_begin (&thread_current ()->donations);
+  
+  while(e != list_end (&thread_current ()->donations))
+  {
+    struct thread *t = list_entry (e, struct thread, donelem);
+    next = list_next(e);
+    if(t->wanted_lock == lock)
+      list_remove(e);
+    e = next;
+  }
+  thread_update_priority ();
+}
+
 /* 
  * pseudOS: Compares the priority of the current thread with the max. priority of a threads 
  * in the ready list. Is the proirity of the current thread less than the other one, the
  * current thready is yield.
  */
-static void
+void
 thread_priority_check (void)
 {
   if(! list_empty(&ready_list))
   {
     struct thread *t_max = list_entry (list_back (&ready_list), struct thread, elem);
+    ASSERT(is_thread(t_max));
+    
     if(thread_current ()->priority < t_max->priority && thread_current () != idle_thread)
+    {
       if(intr_context()) 
 	intr_yield_on_return ();
       else 
 	thread_yield();
+    }
   }
 }
 
@@ -663,6 +741,8 @@ thread_priority_check (void)
 void 
 thread_wake_up (struct thread *t, void *aux UNUSED) 
 {
+  ASSERT (intr_get_level () == INTR_OFF);
+  
   if(t->status == THREAD_BLOCKED && t->ticks_to_sleep > 0) 
   {
     t->ticks_to_sleep--;
@@ -672,7 +752,7 @@ thread_wake_up (struct thread *t, void *aux UNUSED)
 }
 
 /* 
- * pseudOS: Returns true if value A is less than value B, false
+ * pseudOS: Returns true if value A is less or equal than value B, false
  * otherwise. 
  */
 bool

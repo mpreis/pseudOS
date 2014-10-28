@@ -68,8 +68,8 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      // pseudOS
-      //list_push_back (&sema->waiters, &thread_current ()->elem);
+      // pseudOS: insert waiters of sema ordered
+      thread_donate_priority();
       list_insert_ordered(&sema->waiters, &thread_current ()->elem, thread_priority_leq, NULL);
       thread_block ();
     }
@@ -117,13 +117,13 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters))
   {
-    // pseudOS
-    //thread_unblock (list_entry (list_pop_front (&sema->waiters),
-    //                            struct thread, elem));
+    // pseudOS: waiter with highest priority is at the end of the list
     thread_unblock (list_entry (list_pop_back (&sema->waiters),
                                 struct thread, elem));
   }
   sema->value++;
+  if(!intr_context ())
+    thread_priority_check ();
   intr_set_level (old_level);
 }
 
@@ -163,7 +163,7 @@ sema_test_helper (void *sema_)
       sema_up (&sema[1]);
     }
 }
-
+
 /* Initializes LOCK.  A lock can be held by at most a single
    thread at any given time.  Our locks are not "recursive", that
    is, it is an error for the thread currently holding a lock to
@@ -203,8 +203,21 @@ lock_acquire (struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
 
+  // pseudOS
+  enum intr_level old_level = intr_disable ();
+  if(lock->holder)
+  {
+    // pseudOS: lock is already holded; add holders priority to donations
+    thread_current ()->wanted_lock = lock;
+    list_insert_ordered (&lock->holder->donations, 
+		       &thread_current ()->donelem, 
+		       thread_priority_leq, NULL);
+  }
+  
   sema_down (&lock->semaphore);
+  thread_current ()->wanted_lock = NULL;
   lock->holder = thread_current ();
+  intr_set_level (old_level);
 }
 
 /* Tries to acquires LOCK and returns true if successful or false
@@ -220,10 +233,17 @@ lock_try_acquire (struct lock *lock)
 
   ASSERT (lock != NULL);
   ASSERT (!lock_held_by_current_thread (lock));
-
+  
+  enum intr_level old_level = intr_disable (); // pseudOS
+  
   success = sema_try_down (&lock->semaphore);
-  if (success)
+  if (success) 
+  {
+    // pseudOS: current thread get lock
+    thread_current ()->wanted_lock = NULL;
     lock->holder = thread_current ();
+  }
+  intr_set_level (old_level);
   return success;
 }
 
@@ -238,8 +258,12 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
+  // pseudOS
+  enum intr_level old_level = intr_disable ();
   lock->holder = NULL;
+  thread_remove_donation (lock);
   sema_up (&lock->semaphore);
+  intr_set_level (old_level);
 }
 
 /* Returns true if the current thread holds LOCK, false

@@ -88,6 +88,7 @@ struct thread
     char name[16];                      /* Name (for debugging purposes). */
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
+    int init_priority;			/* pseudOS: Initial priorirty */
     struct list_elem allelem;           /* List element for all threads list. */
 
     /* Shared between thread.c and synch.c. */
@@ -101,6 +102,10 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
     uint64_t ticks_to_sleep;		/* Number of ticks that the thread has to sleep */
+    
+    struct list donations;		/* pseudOS: list of donations */
+    struct list_elem donelem;		/* pseudOS: element of the donation list */
+    struct lock *wanted_lock;		/* pseudOS: lock needed by this thread */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -144,6 +149,10 @@ int thread_get_load_avg (void);
  */
 void thread_wake_up (struct thread *t, void *aux UNUSED); 
 bool thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+void thread_donate_priority(void);
+void thread_remove_donation (struct lock *lock);
+void thread_update_priority (void);
+void thread_priority_check (void);
 
 
 #endif /* threads/thread.h */
