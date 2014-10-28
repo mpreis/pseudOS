@@ -32,6 +32,11 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 
+/*
+ * pseudOS: static functions
+ */ 
+static bool cond_thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
    manipulating it:
@@ -68,9 +73,9 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      // pseudOS: insert waiters of sema ordered
+      // pseudOS: insert thread into waiters-list of SEMA
       thread_donate_priority();
-      list_insert_ordered(&sema->waiters, &thread_current ()->elem, thread_priority_leq, NULL);
+      list_push_back(&sema->waiters, &thread_current ()->elem);
       thread_block ();
     }
   sema->value--;
@@ -117,13 +122,15 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters))
   {
+    // pseudOS: sort waiters-list to ensure the correct order
+    list_sort(&sema->waiters, thread_priority_leq, NULL);
     // pseudOS: waiter with highest priority is at the end of the list
     thread_unblock (list_entry (list_pop_back (&sema->waiters),
                                 struct thread, elem));
   }
   sema->value++;
-  if(!intr_context ())
-    thread_priority_check ();
+  thread_priority_check ();	// pseudOS: check if there is a thread with a 
+				// higher priority
   intr_set_level (old_level);
 }
 
@@ -347,9 +354,14 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
 
-  if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
+  if (!list_empty (&cond->waiters)) { 
+    // pseudOS
+    list_sort(&cond->waiters, cond_thread_priority_leq, NULL);
+    
+    // pseudOS: front -> back
+    sema_up (&list_entry (list_pop_back (&cond->waiters),
                           struct semaphore_elem, elem)->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -366,4 +378,26 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+
+/* 
+ * pseudOS: Returns true if value A is less or equal than value B, false
+ * otherwise. 
+ */
+static bool
+cond_thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED) 
+{
+  struct semaphore_elem *se_a = list_entry (a_, struct semaphore_elem, elem);
+  struct semaphore_elem *se_b = list_entry (b_, struct semaphore_elem, elem);
+  
+  list_sort(&se_a->semaphore.waiters, thread_priority_leq, NULL);
+  list_sort(&se_b->semaphore.waiters, thread_priority_leq, NULL);
+  
+  struct list_elem *e_a = list_back(&se_a->semaphore.waiters);
+  struct list_elem *e_b = list_back(&se_b->semaphore.waiters);
+  
+  struct thread *a = list_entry(e_a, struct thread, elem);
+  struct thread *b = list_entry(e_b, struct thread, elem);
+  
+  return a->priority <= b->priority;
 }
