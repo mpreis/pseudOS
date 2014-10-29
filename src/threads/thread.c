@@ -778,7 +778,7 @@ thread_priority_check (void)
     struct thread *t_max = list_entry (list_back (&ready_list), struct thread, elem);
     ASSERT(is_thread(t_max));
     
-    if(thread_current ()->priority < t_max->priority && thread_current () != idle_thread)
+    if(thread_current ()->priority <= t_max->priority)
     {
       if(intr_context()) 
 	intr_yield_on_return ();

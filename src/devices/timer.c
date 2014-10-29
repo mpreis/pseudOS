@@ -207,7 +207,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
       thread_calculate_load_avg ();
       thread_foreach (thread_calculate_recent_cpu, NULL);
     }
-    if(thread_mlfqs && timer_ticks () % 4 == 0)
+    if(timer_ticks () % 4 == 0)
     {
       thread_foreach(thread_calculate_priority, NULL);
     }

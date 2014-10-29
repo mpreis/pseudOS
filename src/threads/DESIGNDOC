@@ -204,6 +204,17 @@ if each thread knows the lock it is waiting for.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Extensions of struct thread in thread.h:
+  - int niceness
+    Holds the nice value of a thread.
+    
+  - int recent_cpu
+    CPU time this thread has received recently.
+    
+Extensions of globals in thread.c:
+  - int load_avg
+    Average number of threads ready to run over the past minute.
+
 ---- ALGORITHMS ----
 
 >> C2: Suppose threads A, B, and C have nice values 0, 1, and 2.  Each
@@ -214,23 +225,41 @@ if each thread knows the lock it is waiting for.
 timer  recent_cpu    priority   thread
 ticks   A   B   C   A   B   C   to run
 -----  --  --  --  --  --  --   ------
- 0
- 4
- 8
-12
-16
-20
-24
-28
-32
-36
+ 0      0   0   0  63  61  59      A
+ 4      4   0   0  62  61  59      A
+ 8      8   0   0  61  61  59      B
+12      8   4   0  61  60  59      A
+16     12   4   0  60  60  59      B
+20     12   8   0  60  59  59      A
+24     16   8   0  59  59  59      C
+28     16   8   4  59  59  58      B
+32     16  12   4  59  58  58      A
+36     20  12   4  58  58  58      C
 
 >> C3: Did any ambiguities in the scheduler specification make values
 >> in the table uncertain?  If so, what rule did you use to resolve
 >> them?  Does this match the behavior of your scheduler?
 
+Yes. If there are one or more threads with sthe same priority as the
+current running thread, it is not clear witch thread should run next.
+One opportunity is to continue running the current thread. Another is
+to yield the current running thread and execution a thread of the ready 
+ones.
+
+We decided to stop the current running thread and switch to the thread
+of the ready list which was inserted first. 
+
 >> C4: How is the way you divided the cost of scheduling between code
 >> inside and outside interrupt context likely to affect performance?
+
+We are doing the most parts of the scheduling algorithm inside the
+interrupt context, because the calculation of recent_cpu, priority, etc.
+have to be done in constant intervals. It is not necessary to do this
+things every timer interrupt, so (as given from the documentation) we
+have conditions to do it every second.
+Also checking checking the blocked_list is very expensive. But due to
+the seperate list we just have to iterate over all blocked threads
+each interrupt.
 
 ---- RATIONALE ----
 
@@ -239,12 +268,32 @@ ticks   A   B   C   A   B   C   to run
 >> time to work on this part of the project, how might you choose to
 >> refine or improve your design?
 
+Advantages:
+  + All needed datastructes are given by the OS
+  + Less extensions are requiered
+  
+Disadvantages:
+  - Sorting the lists and/or inserting ordered is expansive
+  - interrupts are also expensive
+  
+Future work:
+  * Try to reduce the number of interrupts
+  * Replace the ready list by an ready list for each priority
+
 >> C6: The assignment explains arithmetic for fixed-point math in
 >> detail, but it leaves it open to you to implement it.  Why did you
 >> decide to implement it the way you did?  If you created an
 >> abstraction layer for fixed-point math, that is, an abstract data
 >> type and/or a set of functions or macros to manipulate fixed-point
 >> numbers, why did you do so?  If not, why not?
+
+The fixed-point arithmetic is implemented in a seperate header file
+called "fixed-point.h" as mentioned in the documentation.
+We have decided to use inline functions. Functions are really handy
+and clear. Because all functions are very short in terms of operations
+(mostly just one equation), the compiler can replace the function calls
+directly with the code in the function. This leads to a performance
+optimization.
 
 			   SURVEY QUESTIONS
 			   ================
