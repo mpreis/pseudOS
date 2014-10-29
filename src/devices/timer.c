@@ -205,10 +205,13 @@ timer_interrupt (struct intr_frame *args UNUSED)
     if(timer_ticks () % TIMER_FREQ == 0)
     {
       thread_calculate_load_avg ();
-       
-      // pseudOS: recalc recent_cpu and recalc priority
-      thread_update_mlfqs_properties ();
+      thread_foreach (thread_calculate_recent_cpu, NULL);
     }
+    if(thread_mlfqs && timer_ticks () % 4 == 0)
+    {
+      thread_foreach(thread_calculate_priority, NULL);
+    }
+    thread_increase_recent_cpu ();
   }
   
   /* pseudOS: check all threads in the blocked_list if they have to wake up */

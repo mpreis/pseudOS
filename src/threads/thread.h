@@ -154,10 +154,10 @@ void thread_donate_priority(void);
 void thread_remove_donation (struct lock *lock);
 void thread_update_priority (void);
 void thread_priority_check (void);
-void thread_calculate_priority (struct thread *t);
-void thread_calculate_recent_cpu (struct thread *t);
+void thread_calculate_priority (struct thread *t, void *aux UNUSED);
+void thread_calculate_recent_cpu (struct thread *t, void *aux UNUSED);
 void thread_calculate_load_avg (void);
 void thread_update_mlfqs_properties (void);
-
+void thread_increase_recent_cpu (void);
 
 #endif /* threads/thread.h */
