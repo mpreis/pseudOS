@@ -24,6 +24,11 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/* pseudOS: Nice range */
+#define NICE_MIN -20			/* Lowest niceness. */
+#define NICE_DEFAULT 0			/* Default niceness. */
+#define NICE_MAX 20			/* Highest niceness. */
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -137,6 +142,7 @@ void thread_yield (void);
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);
 void thread_foreach (thread_action_func *, void *);
+void thread_foreach_ready (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
@@ -149,15 +155,16 @@ int thread_get_load_avg (void);
 /* 
  * pseudOS: public functions 
  */
+// priority donation
 bool thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 void thread_donate_priority(void);
 void thread_remove_donation (struct lock *lock);
 void thread_update_priority (void);
 void thread_priority_check (void);
-void thread_calculate_priority (struct thread *t, void *aux UNUSED);
-void thread_calculate_recent_cpu (struct thread *t, void *aux UNUSED);
-void thread_calculate_load_avg (void);
-void thread_update_mlfqs_properties (void);
-void thread_increase_recent_cpu (void);
+// mlfqs
+void thread_mlfqs_calc_priority (struct thread *t, void *aux UNUSED);
+void thread_mlfqs_calc_recent_cpu (struct thread *t, void *aux UNUSED);
+void thread_mlfqs_calc_load_avg (void);
+void thread_mlfqs_update_properties (void);
 
 #endif /* threads/thread.h */

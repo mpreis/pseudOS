@@ -111,7 +111,7 @@ timer_sleep (int64_t ticks)
     // disable intrupts, to be sure that the thread can block itself
     enum intr_level old_level = intr_disable ();
     // set the ticks in a thread-local variable
-    thread_current ()->ticks_to_sleep = ticks;
+    thread_current ()->ticks_to_sleep = timer_ticks () + ticks;;
     // insert thread in sorted blocked list
     list_insert_ordered (&blocked_list, &thread_current ()->elem, thread_ticks_leq, NULL);
     // block thread to start sleeping
@@ -199,41 +199,17 @@ timer_interrupt (struct intr_frame *args UNUSED)
   thread_tick ();
   ASSERT (intr_get_level () == INTR_OFF);
   
-  /* pseudOS: recent_cpu, priority and load_avg have to be updated every multiple of a second */
-  if(thread_mlfqs) 
+  /* pseudOS: check threads in the blocked_list if they have to wake up */
+  struct list_elem *e = list_begin (&blocked_list); 
+  struct thread *t = list_entry (e, struct thread, elem);
+  
+  int current_ticks = timer_ticks ();
+  while (e != list_end (&blocked_list) && t->ticks_to_sleep <= current_ticks)
   {
-    if(timer_ticks () % TIMER_FREQ == 0)
-    {
-      thread_calculate_load_avg ();
-      thread_foreach (thread_calculate_recent_cpu, NULL);
-    }
-    if(timer_ticks () % 4 == 0)
-    {
-      thread_foreach(thread_calculate_priority, NULL);
-    }
-    thread_increase_recent_cpu ();
-  }
-  
-  /* pseudOS: check all threads in the blocked_list if they have to wake up */
-  
-  struct list_elem *e = list_begin(&blocked_list);
-  struct list_elem *next;
-  struct thread *t;
-  
-  while(e != list_end(&blocked_list)) 
-  {
-    t = list_entry (e, struct thread, elem);
-    next = list_next(e);
-    if(t->ticks_to_sleep > 0) 
-    {
-      t->ticks_to_sleep--;
-      if(t->ticks_to_sleep == 0) 
-      {
-	list_remove(e);
-	thread_unblock(t);
-      }
-    }
-    e = next;
+      list_pop_front (&blocked_list);
+      thread_unblock (t);
+      e = list_begin (&blocked_list);
+      t = list_entry (e, struct thread, elem);
   }
 }
 
