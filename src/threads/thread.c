@@ -148,31 +148,11 @@ thread_tick (void)
   {
     if(t != idle_thread)
       t->recent_cpu = add_fp_and_int(t->recent_cpu, 1);  
-  
-    /*
-      struct thread *t;
-      struct list_elem *e = list_begin(&all_list);
     
-      thread_mlfqs_calc_load_avg ();
-      while(e != list_end(&all_list)) 
-      {
-	t = list_entry (e, struct thread, allelem);
-	
-	if(timer_ticks () % TIMER_FREQ == 0) 
-	  thread_mlfqs_calc_recent_cpu (t, NULL);
-	
-	if(timer_ticks () % TIME_SLICE == 0) 
-	  thread_mlfqs_calc_priority(t, NULL);
-	
-	e = list_next(e);
-      }
-    */
-    
-    //thread_mlfqs_update_properties ();
-    struct thread *t1;
-    struct list_elem *e = list_begin(&all_list);
     if(timer_ticks () % TIMER_FREQ == 0) 
     {
+      struct thread *t1;
+      struct list_elem *e = list_begin(&all_list);
       thread_mlfqs_calc_load_avg ();
       while(e != list_end(&all_list)) 
       {
@@ -182,9 +162,10 @@ thread_tick (void)
       }
     }  
      
-    e = list_begin(&all_list);
     if(timer_ticks () % TIME_SLICE == 0) 
     {
+      struct thread *t1;
+      struct list_elem *e = list_begin(&all_list);
       while(e != list_end(&all_list)) 
       {
 	t1 = list_entry (e, struct thread, allelem);
@@ -192,22 +173,9 @@ thread_tick (void)
 	e = list_next(e);
       }
     }  
-    thread_priority_check ();
-    
-    /*
-    if(timer_ticks () % TIMER_FREQ == 0)
-    {
-      thread_mlfqs_calc_load_avg ();
-      thread_foreach (thread_mlfqs_calc_recent_cpu, NULL);
-    }
-    if(timer_ticks () % 4 == 0)
-    {
-      thread_foreach(thread_mlfqs_calc_priority, NULL);
-    }
-    */
   }
   
-    /* Enforce preemption. */
+  /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 
@@ -620,7 +588,7 @@ init_thread (struct thread *t, const char *name, int priority)
   
   if(t == initial_thread) 
   {
-    t->recent_cpu = 0;
+    t->recent_cpu = convert_int_to_fp (0);
     t->niceness = NICE_DEFAULT;		/* pseudOS */
   }
   else
