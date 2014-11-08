@@ -445,8 +445,6 @@ setup_stack (void **esp)
   uint8_t *kpage;
   bool success = false;
 
-  printf(" --- setup stack\n"); // peudOS
-
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
@@ -464,8 +462,6 @@ setup_stack (void **esp)
 static bool
 init_stack (void **esp, char **argv) 
 {
-  bool success = false;
-
   // pseudOS: push all function parameters on the stack
   char *token, *save_ptr;
   char **argv_ptr = palloc_get_page(PAL_USER);
@@ -506,13 +502,15 @@ init_stack (void **esp, char **argv)
   memcpy(*esp, &argc, sizeof(int));
 
   //pseudOS: push dummy return address on the stack
-  void *n = (void *)0;
+  void *n = NULL;
   *esp -= sizeof(void *);
   memcpy(*esp, &n, sizeof(void *));
 
   palloc_free_page(argv_ptr);
 
-  return success;
+  printf(" --- end \n");
+
+  return true;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
