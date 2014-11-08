@@ -28,6 +28,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, char **a
 tid_t
 process_execute (const char *file_name) 
 {
+  printf("process_execute\n");
   char *fn_copy, *save_ptr;
   tid_t tid;
 
@@ -202,7 +203,8 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp, char *file_name, char **argv);
+static bool setup_stack (void **esp);
+static bool init_stack (void **esp, char **argv);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -309,7 +311,11 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp, (char *)file_name, argv))
+  if (!setup_stack (esp))
+    goto done;
+
+  /* pseudOS: init stack */
+  if (!init_stack (esp, argv))
     goto done;
 
   /* Start address. */
@@ -434,7 +440,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp, char *file_name, char **argv) 
+setup_stack (void **esp) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -444,19 +450,28 @@ setup_stack (void **esp, char *file_name, char **argv)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12 /*pseudOS */;
+        *esp = PHYS_BASE;
       else
         palloc_free_page (kpage);
     }
 
+  return success;
+}
+
+/* pseudOS: Initialize the stack with all startup information for argument passing. */
+static bool
+init_stack (void **esp, char **argv) 
+{
+  bool success = false;
+
   // pseudOS: push all function parameters on the stack
-  char *token;
+  char *token, *save_ptr;
   char **argv_ptr = palloc_get_page(PAL_USER);
   int argc = 0;
 
   //pseudOS: push all data of args on the stack
-  for (token = strtok_r (file_name, " ", argv) ;token != NULL;
-       token = strtok_r (NULL, " ", argv))
+  for (token = strtok_r (*argv, " ", &save_ptr) ;token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr))
   {
     printf ("'%s'\n", token);
     *esp -= strlen(token) + 1;
@@ -468,6 +483,7 @@ setup_stack (void **esp, char *file_name, char **argv)
 
   //pseudOS: push word align on the stack
   int word_align = (int) *esp % 4;
+  if(word_align < 0) word_align += 4;
   *esp -= word_align;
   memcpy(*esp, &argv_ptr[argc], word_align);
 
@@ -481,7 +497,7 @@ setup_stack (void **esp, char *file_name, char **argv)
 
   //pseudOS: push pointer to argv_ptr[0] on the stack
   char *ptr_to_argv = *esp;
-  *esp -= sizeof(char **);
+  *esp -= sizeof(char *);
   memcpy(*esp, &ptr_to_argv, sizeof(char *));
 
   //pseudOS: push argc on the stack
@@ -491,7 +507,7 @@ setup_stack (void **esp, char *file_name, char **argv)
   //pseudOS: push dummy return address on the stack
   void *n = NULL;
   *esp -= sizeof(void *);
-  memcpy(*esp, n, sizeof(void *));
+  memcpy(*esp, &n, sizeof(void *));
 
   palloc_free_page(argv_ptr);
 
