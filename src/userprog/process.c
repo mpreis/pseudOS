@@ -19,7 +19,7 @@
 #include "threads/vaddr.h"
 
 static thread_func start_process NO_RETURN;
-static bool load (const char *cmdline, void (**eip) (void), void **esp);
+static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -28,7 +28,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *fn_copy, *save_ptr;
   tid_t tid;
 
   /* Make a copy of FILE_NAME.
@@ -37,6 +37,9 @@ process_execute (const char *file_name)
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
+
+  /* pseudOS: split string to get filename */
+  file_name = strtok_r ((char *)file_name, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
@@ -50,7 +53,8 @@ process_execute (const char *file_name)
 static void
 start_process (void *file_name_)
 {
-  char *file_name = file_name_;
+  /* pseudOS: split string to get filename */
+  char *save_ptr, *file_name = strtok_r (file_name_, " ", &save_ptr);
   struct intr_frame if_;
   bool success;
 
@@ -59,7 +63,7 @@ start_process (void *file_name_)
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
-  success = load (file_name, &if_.eip, &if_.esp);
+  success = load (file_name, &if_.eip, &if_.esp, &save_ptr);
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
@@ -195,7 +199,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, char *file_name, char **argv);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -206,7 +210,7 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
 bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+load (const char *file_name, void (**eip) (void), void **esp, char **argv) 
 {
   struct thread *t = thread_current ();
   struct Elf32_Ehdr ehdr;
@@ -302,7 +306,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, (char *)file_name, argv))
     goto done;
 
   /* Start address. */
@@ -315,7 +319,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file_close (file);
   return success;
 }
-
+
 /* load() helpers. */
 
 static bool install_page (void *upage, void *kpage, bool writable);
@@ -427,7 +431,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, char *file_name, char **argv) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -441,6 +445,53 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
+
+  // pseudOS: push all function parameters on the stack
+  char *token;
+  char **argv_ptr = palloc_get_page(PAL_USER);
+  int argc = 0;
+
+  //pseudOS: push all data of args on the stack
+  for (token = strtok_r (file_name, " ", argv) ;token != NULL;
+       token = strtok_r (NULL, " ", argv))
+  {
+    printf ("'%s'\n", token);
+    *esp -= strlen(token) + 1;
+    argv_ptr[argc] = *esp;
+    memcpy(*esp, token, strlen(token) + 1);
+    argc++;
+  }
+  argv_ptr[argc] = NULL;
+
+  //pseudOS: push word align on the stack
+  int word_align = (int) *esp % 4;
+  *esp -= word_align;
+  memcpy(*esp, &argv_ptr[argc], word_align);
+
+  //pseudOS: push all pointers to argv_ptr on the stack
+  int i;
+  for(i = argc; i >= 0; i--)
+  {
+    *esp -= sizeof(char *);
+    memcpy(*esp, &argv_ptr[i], sizeof(char *));
+  }
+
+  //pseudOS: push pointer to argv_ptr[0] on the stack
+  char *ptr_to_argv = *esp;
+  *esp -= sizeof(char **);
+  memcpy(*esp, &ptr_to_argv, sizeof(char *));
+
+  //pseudOS: push argc on the stack
+  *esp -= sizeof(int);
+  memcpy(*esp, &argc, sizeof(int));
+
+  //pseudOS: push dummy return address on the stack
+  void *n = NULL;
+  *esp -= sizeof(void *);
+  memcpy(*esp, n, sizeof(void *));
+
+  palloc_free_page(argv_ptr);
+
   return success;
 }
 
