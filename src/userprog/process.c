@@ -473,7 +473,6 @@ init_stack (void **esp, char **argv)
   for (token = strtok_r (*argv, " ", &save_ptr) ;token != NULL;
        token = strtok_r (NULL, " ", &save_ptr))
   {
-    printf ("'%s'\n", token);
     *esp -= strlen(token) + 1;
     argv_ptr[argc] = *esp;
     memcpy(*esp, token, strlen(token) + 1);
