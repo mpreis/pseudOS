@@ -439,12 +439,14 @@ setup_stack (void **esp, char *file_name, char **argv)
   uint8_t *kpage;
   bool success = false;
 
+  printf(" --- setup stack\n"); // peudOS
+
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE - 12 /*pseudOS */;
+        *esp = PHYS_BASE /*pseudOS */;
       else
         palloc_free_page (kpage);
     }
@@ -458,7 +460,7 @@ setup_stack (void **esp, char *file_name, char **argv)
   for (token = strtok_r (file_name, " ", argv) ;token != NULL;
        token = strtok_r (NULL, " ", argv))
   {
-    printf ("'%s'\n", token);
+    printf (" --- -- prg/arg: %s\n", token);
     *esp -= strlen(token) + 1;
     argv_ptr[argc] = *esp;
     memcpy(*esp, token, strlen(token) + 1);
@@ -468,6 +470,8 @@ setup_stack (void **esp, char *file_name, char **argv)
 
   //pseudOS: push word align on the stack
   int word_align = (int) *esp % 4;
+  if(word_align < 0)
+    word_align = 4 + word_align;
   *esp -= word_align;
   memcpy(*esp, &argv_ptr[argc], word_align);
 
@@ -481,17 +485,18 @@ setup_stack (void **esp, char *file_name, char **argv)
 
   //pseudOS: push pointer to argv_ptr[0] on the stack
   char *ptr_to_argv = *esp;
-  *esp -= sizeof(char **);
-  memcpy(*esp, &ptr_to_argv, sizeof(char *));
+  int size_char_ptr_ptr = sizeof(char **);
+  *esp -= size_char_ptr_ptr;
+  memcpy(*esp, &ptr_to_argv, size_char_ptr_ptr);
 
   //pseudOS: push argc on the stack
   *esp -= sizeof(int);
   memcpy(*esp, &argc, sizeof(int));
 
   //pseudOS: push dummy return address on the stack
-  void *n = NULL;
+  void *n = (void *)0;
   *esp -= sizeof(void *);
-  memcpy(*esp, n, sizeof(void *));
+  memcpy(*esp, &n, sizeof(void *));
 
   palloc_free_page(argv_ptr);
 

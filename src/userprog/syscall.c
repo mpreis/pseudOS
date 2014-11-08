@@ -3,9 +3,15 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "pagedir.h"
+
+#define OFFSET_ARG1 4
+#define OFFSET_ARG2 8
+#define OFFSET_ARG3 12
 
 static void syscall_handler (struct intr_frame *);
-
+static bool is_valid_usr_ptr(const void * ptr);
 void
 syscall_init (void) 
 {
@@ -15,15 +21,8 @@ syscall_init (void)
 void
 syscall_handler (struct intr_frame *f) 
 {
-  /* pseudOS: As part of a system call, the kernel must often access 
-   * memory through pointers provided by a user program. The kernel 
-   * must be very careful about doing so, because the user can pass 
-   * a null pointer, a pointer to unmapped virtual memory, or a pointer 
-   * to kernel virtual address space (above PHYS_BASE). All of these types 
-   * of invalid pointers must be rejected without harm to the kernel or other 
-   * running processes, by terminating the offending process and freeing its 
-   * resources.
-   */
+	if(!is_valid_usr_ptr(f->esp)) 
+ 		thread_exit();
 
   void *stack_ptr = f->esp;
   uint32_t syscall_nr = *(uint32_t *) stack_ptr;
@@ -34,7 +33,7 @@ syscall_handler (struct intr_frame *f)
 	{
 		// case SYS_HALT: break;
 		case SYS_EXIT: 
-			exit( *(int *)(stack_ptr + 1)  );
+			exit( *(int *)(stack_ptr + OFFSET_ARG1)  );
 			break;
 		// case SYS_EXEC: break; 
 		// case SYS_WAIT: break;
@@ -45,9 +44,9 @@ syscall_handler (struct intr_frame *f)
 		// case SYS_READ: break;
 		case SYS_WRITE: 
 			write ( 
-				*(int *)(stack_ptr + 1), 
-				(stack_ptr + 2), 
-				*(unsigned int *)(stack_ptr + 3));
+				*(int *)(stack_ptr + OFFSET_ARG1), 
+				*(char **)(stack_ptr + OFFSET_ARG2), 
+				*(unsigned int *)(stack_ptr + OFFSET_ARG3));
 			break;
 		// case SYS_SEEK: break;
 		// case SYS_TELL: break;
@@ -165,10 +164,14 @@ int
 write (int fd, const void *buffer, unsigned size)
 {
   printf("system call: write - size: %u\n", size);
+  printf("valid ptr: %d\n", is_valid_usr_ptr(buffer));
+ 
+ 	if(!is_valid_usr_ptr(buffer)) 
+ 		thread_exit();
+
   if(fd == 1)
   {
   	putbuf(buffer, size);
-  	printf("write to console\n");
   	return size;
   }
   return 0;
@@ -204,3 +207,20 @@ write (int fd, const void *buffer, unsigned size)
 //   printf("system call: close\n");
 // }
 
+/* pseudOS: As part of a system call, the kernel must often access 
+ * memory through pointers provided by a user program. The kernel 
+ * must be very careful about doing so, because the user can pass 
+ * a null pointer, a pointer to unmapped virtual memory, or a pointer 
+ * to kernel virtual address space (above PHYS_BASE). All of these types 
+ * of invalid pointers must be rejected without harm to the kernel or other 
+ * running processes, by terminating the offending process and freeing its 
+ * resources.
+ */
+static bool
+is_valid_usr_ptr(const void * ptr)
+{
+	// a pointer to unmapped virtual memory
+	return (ptr != NULL)
+				&& is_user_vaddr(ptr)
+				&& pagedir_get_page(thread_current()->pagedir, ptr) != (void *)NULL;	
+}

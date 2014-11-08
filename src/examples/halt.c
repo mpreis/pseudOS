@@ -11,13 +11,17 @@ main (void)
 {
 	// pseudOS: start
 	char *file = (void *)0;
-	void *buffer = "abc";
+	char buffer[3]; 
 	pid_t pid = 1;
 	unsigned initial_size = 10;
-	unsigned length = 3;
+	unsigned length = 1;
 	unsigned position = 2;
 	int fd = 1;
 
+	buffer[0] = 'a';
+	buffer[1] = 'b';
+	buffer[2] = '\0';
+	
 	//halt ();
 	//exit (0);
 	//exec (file);
