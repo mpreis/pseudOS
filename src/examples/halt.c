@@ -10,28 +10,29 @@ int
 main (void)
 {
 	// pseudOS: start
-	char *file = (void *)0;
-	char buffer[3]; 
+	char buffer[5]; 
 	pid_t pid = 1;
 	unsigned initial_size = 10;
 	unsigned length = 1;
 	unsigned position = 2;
 	int fd = 1;
 
-	buffer[0] = 'a';
-	buffer[1] = 'b';
-	buffer[2] = '\0';
+	buffer[0] = 'h';
+	buffer[1] = 'a';
+	buffer[2] = 'l';
+	buffer[3] = 't';
+	buffer[4] = '\0';
 	
 	//halt ();
 	//exit (0);
 	//exec (file);
 	//wait (pid);
-	//create (file, initial_size);
-	//remove (file);
-	//open (file);
+	//create (buffer, initial_size);
+	//remove (buffer);
+	open (buffer);
 	//filesize (fd);
 	//read (fd, buffer, length);
-	write (fd, buffer, length);
+	//write (fd, buffer, length);
 	//seek (fd, position);
 	//tell (fd);
 	//close (fd);

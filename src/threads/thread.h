@@ -29,6 +29,8 @@ typedef int tid_t;
 #define NICE_DEFAULT 0			/* Default niceness. */
 #define NICE_MAX 20			/* Highest niceness. */
 
+#define FD_INIT 2   /* pseudOS */
+
 /* A kernel thread or user process.
 
    Each thread structure is stored in its own 4 kB page.  The
@@ -105,14 +107,28 @@ struct thread
 #endif
 
     /* Owned by thread.c. */
-    unsigned magic;                     /* Detects stack overflow. */
-    uint64_t ticks_to_sleep;		/* Number of ticks that the thread has to sleep */
-    
-    struct list donations;		/* pseudOS: list of donations */
-    struct list_elem donelem;		/* pseudOS: element of the donation list */
-    struct lock *wanted_lock;		/* pseudOS: lock needed by this thread */
-    int niceness; 			/* Nice value of a thread. */
-    int recent_cpu; 			/* How much time recieved this thread recently. */
+    unsigned magic;              /* Detects stack overflow. */
+
+    /* pseudOS: Project 1 */
+    uint64_t ticks_to_sleep;		 /* pseudOS: Number of ticks that the thread has to sleep */
+    struct list donations;		   /* pseudOS: List of donations */
+    struct list_elem donelem;		 /* pseudOS: Element of the donation list */
+    struct lock *wanted_lock;		 /* pseudOS: Lock needed by this thread */
+    int niceness; 			         /* pseudOS: Nice value of a thread. */
+    int recent_cpu; 			       /* pseudOS: How much time recieved this thread recently. */
+
+    /* pseudOS: Project 2 */
+    struct list fds;             /* pseudOS: This list holds pointers and file descriptors of all open files. */
+  };
+
+  /*
+   * pseudOS: Represents an entry in the fds list of a thread.
+   */
+  struct file_descriptor_t
+  {
+    int fd;
+    struct file *file_ptr;
+    struct list_elem elem;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -157,6 +173,7 @@ int thread_get_load_avg (void);
  */
 // priority donation
 bool thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
+bool thread_fds_less (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 void thread_donate_priority(void);
 void thread_remove_donation (struct lock *lock);
 void thread_update_priority (void);

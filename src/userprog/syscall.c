@@ -1,17 +1,23 @@
 #include "userprog/syscall.h"
-#include <stdio.h>
-#include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
+#include "devices/shutdown.h"
+#include "filesys/filesys.h"
 #include "pagedir.h"
 
-#define OFFSET_ARG1 4
-#define OFFSET_ARG2 8
-#define OFFSET_ARG3 12
+#include <stdio.h>
+#include <syscall-nr.h>
+
+#define OFFSET_ARG 4
 
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_usr_ptr(const void * ptr);
+
+/* TODO:
+ *  - remove printfs -> tests won't work within prints
+ */
 
 void
 syscall_init (void) 
@@ -25,29 +31,52 @@ syscall_handler (struct intr_frame *f)
 	if(!is_valid_usr_ptr(f->esp)) 
  		thread_exit();
 
-  void *stack_ptr = f->esp;
-  uint32_t syscall_nr = *(uint32_t *) stack_ptr;
+  uint32_t syscall_nr = *(uint32_t *) (f->esp);
 	
 	printf (" --- system call! (%u)\n", syscall_nr);	
-
+	int b;
 	switch(syscall_nr)
 	{
-		// case SYS_HALT: break;
+		case SYS_HALT: 
+			halt();
+			break;
 		case SYS_EXIT: 
-			exit( *(int *)(stack_ptr + OFFSET_ARG1)  );
+			// pseudOS: maybe we have to increment the stack-pointer: f->esp += OFFSET_ARG1;
+			exit( *(int *)(f->esp + OFFSET_ARG) );
 			break;
 		// case SYS_EXEC: break; 
 		// case SYS_WAIT: break;
-		// case SYS_CREATE: break;
-		// case SYS_REMOVE: break;
-		// case SYS_OPEN: break;
+		case SYS_CREATE: 
+			create ( 
+				*(char **)(f->esp + OFFSET_ARG), 
+				*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
+			f->esp += OFFSET_ARG * 3;
+			break;
+		case SYS_REMOVE: 
+			remove ( *(char **)(f->esp + OFFSET_ARG) );
+			f->esp += OFFSET_ARG * 2;
+			break;
+		case SYS_OPEN: 
+			b = open ( *(char **)(f->esp + OFFSET_ARG) );
+			//f->esp += OFFSET_ARG * 2;
+			printf("file desc: %d\n",b);
+			
+			b = open ( *(char **)(f->esp + OFFSET_ARG) );
+			//f->esp += OFFSET_ARG * 2;
+			printf("file desc: %d\n",b);
+			
+			b = open ( *(char **)(f->esp + OFFSET_ARG) );
+			f->esp += OFFSET_ARG * 2;
+			printf("file desc: %d\n",b);
+			break;
 		// case SYS_FILESIZE: break;
 		// case SYS_READ: break;
-		case SYS_WRITE: 
+		case SYS_WRITE:
 			write ( 
-				*(int *)(stack_ptr + OFFSET_ARG1), 
-				*(char **)(stack_ptr + OFFSET_ARG2), 
-				*(unsigned int *)(stack_ptr + OFFSET_ARG3));
+				*(int *)(f->esp + (OFFSET_ARG * 1)), 
+				*(char **)(f->esp + (OFFSET_ARG * 2)), 
+				*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );
+			f->esp += OFFSET_ARG * 4;
 			break;
 		// case SYS_SEEK: break;
 		// case SYS_TELL: break;
@@ -65,8 +94,8 @@ syscall_handler (struct intr_frame *f)
 void
 halt (void)
 {
-  //printf(" ----- system call: halt\n");
-  thread_exit();
+  printf(" --- system call: halt\n");
+  shutdown_power_off();
 }
 
 /*
@@ -102,37 +131,47 @@ exit (int status)
 //   return -1;
 // }
 
-// /*
-//  * pseudOS: Creates a new file called file initially initial_size bytes in size. 
-//  * Returns true if successful, false otherwise. 
-//  */
-// bool 
-// create (const char *file, unsigned initial_size)
-// {
-//   printf("system call: create\n");
-//   return false;
-// }
+/*
+ * pseudOS: Creates a new file called file initially initial_size bytes in size. 
+ * Returns true if successful, false otherwise. 
+ */
+bool 
+create (const char *file, unsigned initial_size)
+{
+	return filesys_create (file, initial_size); 
+}
 
-// /*
-//  * pseudOS: Deletes the file called file. Returns true if successful, false otherwise. 
-//  */
-// bool 
-// remove (const char *file)
-// {
-//   printf("system call: remove\n");
-//   return false;
-// }
+/*
+ * pseudOS: Deletes the file called file. Returns true if successful, false otherwise. 
+ */
+bool 
+remove (const char *file)
+{
+  return filesys_remove (file);
+}
 
-// /*
-//  * pseudOS: Opens the file called file. Returns a nonnegative integer handle called a 
-//  * "file descriptor" (fd), or -1 if the file could not be opened.
-//  */
-// int 
-// open (const char *file)
-// {
-//   printf("system call: open\n");
-//   return -1;
-// }
+/*
+ * pseudOS: Opens the file called file. Returns a nonnegative integer handle called a 
+ * "file descriptor" (fd), or -1 if the file could not be opened.
+ */
+int 
+open (const char *file)
+{
+	struct file *f = filesys_open (file);
+	if(file != NULL)
+	{
+		struct file_descriptor_t *new_fd;
+		new_fd = malloc(sizeof *new_fd);
+		new_fd->file_ptr = f;
+		new_fd->fd = ( list_empty (&thread_current ()->fds) )
+			? FD_INIT
+			: (list_entry (
+	    	list_back (&thread_current ()->fds), struct file_descriptor_t, elem))->fd + 1;
+		list_insert_ordered(&thread_current()->fds, &new_fd->elem, thread_fds_less, NULL);
+		return new_fd->fd;	
+	}
+  return -1;
+}
 
 // /*
 //  * pseudOS: Returns the size, in bytes, of the file open as fd.
