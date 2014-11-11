@@ -12,6 +12,7 @@
 
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_usr_ptr(const void * ptr);
+
 void
 syscall_init (void) 
 {
@@ -169,7 +170,7 @@ write (int fd, const void *buffer, unsigned size)
  	if(!is_valid_usr_ptr(buffer)) 
  		thread_exit();
 
-  if(fd == 1)
+  if(fd == STDOUT_FILENO)
   {
   	putbuf(buffer, size);
   	return size;
