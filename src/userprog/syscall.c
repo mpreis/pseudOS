@@ -4,7 +4,9 @@
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "devices/shutdown.h"
+#include "devices/input.h"
 #include "filesys/filesys.h"
+#include "filesys/file.h"
 #include "pagedir.h"
 
 #include <stdio.h>
@@ -34,53 +36,73 @@ syscall_handler (struct intr_frame *f)
   uint32_t syscall_nr = *(uint32_t *) (f->esp);
 	
 	printf (" --- system call! (%u)\n", syscall_nr);	
-	int b;
 	switch(syscall_nr)
 	{
 		case SYS_HALT: 
 			halt();
 			break;
+
 		case SYS_EXIT: 
 			// pseudOS: maybe we have to increment the stack-pointer: f->esp += OFFSET_ARG1;
 			exit( *(int *)(f->esp + OFFSET_ARG) );
 			break;
+
 		// case SYS_EXEC: break; 
 		// case SYS_WAIT: break;
 		case SYS_CREATE: 
-			create ( 
+			f->eax = create ( 
 				*(char **)(f->esp + OFFSET_ARG), 
 				*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
 			f->esp += OFFSET_ARG * 3;
 			break;
+
 		case SYS_REMOVE: 
-			remove ( *(char **)(f->esp + OFFSET_ARG) );
+			f->eax = remove ( *(char **)(f->esp + OFFSET_ARG) );
 			f->esp += OFFSET_ARG * 2;
 			break;
+
 		case SYS_OPEN: 
-			b = open ( *(char **)(f->esp + OFFSET_ARG) );
-			//f->esp += OFFSET_ARG * 2;
-			printf("file desc: %d\n",b);
-			
-			b = open ( *(char **)(f->esp + OFFSET_ARG) );
-			//f->esp += OFFSET_ARG * 2;
-			printf("file desc: %d\n",b);
-			
-			b = open ( *(char **)(f->esp + OFFSET_ARG) );
+			f->eax = open ( *(char **)(f->esp + OFFSET_ARG) );
 			f->esp += OFFSET_ARG * 2;
-			printf("file desc: %d\n",b);
 			break;
-		// case SYS_FILESIZE: break;
-		// case SYS_READ: break;
+
+		case SYS_FILESIZE: 
+			f->eax = filesize ( *(int *)(f->esp + OFFSET_ARG) );
+			f->esp += OFFSET_ARG * 2;
+			break;
+
+		case SYS_READ:
+			f->eax = read (
+				*(int *)(f->esp + (OFFSET_ARG * 1)), 
+				*(char **)(f->esp + (OFFSET_ARG * 2)), 
+				*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );	
+			f->esp += OFFSET_ARG * 4;
+			break;
+		
 		case SYS_WRITE:
-			write ( 
+			f->eax = write ( 
 				*(int *)(f->esp + (OFFSET_ARG * 1)), 
 				*(char **)(f->esp + (OFFSET_ARG * 2)), 
 				*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );
 			f->esp += OFFSET_ARG * 4;
 			break;
-		// case SYS_SEEK: break;
-		// case SYS_TELL: break;
-		// case SYS_CLOSE: break;
+
+		case SYS_SEEK: 
+			seek( 
+				*(int *)(f->esp + (OFFSET_ARG * 1)), 
+				*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
+			f->esp += OFFSET_ARG * 3;
+			break;
+
+		case SYS_TELL: 
+			f->eax = tell ( *(int *)(f->esp + (OFFSET_ARG * 1)) );
+			f->esp += OFFSET_ARG * 2;
+			break;
+
+		case SYS_CLOSE: 
+			close ( *(int *)(f->esp + (OFFSET_ARG * 1)) );
+			f->esp += OFFSET_ARG * 2;
+			break;
 		default:
 		printf("ERROR: invalid system call (%d)! \n", syscall_nr);          
 	}
@@ -138,6 +160,9 @@ exit (int status)
 bool 
 create (const char *file, unsigned initial_size)
 {
+ 	if(!is_valid_usr_ptr(file)) 
+ 		thread_exit();
+
 	return filesys_create (file, initial_size); 
 }
 
@@ -147,6 +172,9 @@ create (const char *file, unsigned initial_size)
 bool 
 remove (const char *file)
 {
+ 	if(!is_valid_usr_ptr(file)) 
+ 		thread_exit();
+
   return filesys_remove (file);
 }
 
@@ -157,43 +185,66 @@ remove (const char *file)
 int 
 open (const char *file)
 {
+ 	if(!is_valid_usr_ptr(file)) 
+ 		thread_exit();
+
 	struct file *f = filesys_open (file);
 	if(file != NULL)
 	{
-		struct file_descriptor_t *new_fd;
-		new_fd = malloc(sizeof *new_fd);
-		new_fd->file_ptr = f;
-		new_fd->fd = ( list_empty (&thread_current ()->fds) )
-			? FD_INIT
-			: (list_entry (
-	    	list_back (&thread_current ()->fds), struct file_descriptor_t, elem))->fd + 1;
-		list_insert_ordered(&thread_current()->fds, &new_fd->elem, thread_fds_less, NULL);
-		return new_fd->fd;	
+		struct thread *t = thread_current ();
+		int fds_size = sizeof (t->fds) / sizeof (t->fds[0]);
+		
+		int i;
+		for(i = 0; i < fds_size; i++)
+			if(t->fds[i] == NULL)	break;
+
+		if(i == fds_size) 
+			return -1; // fds array to small
+
+		t->fds[i] = (int *) f;
+		int fd = i + FD_INIT;
+		return fd;
 	}
   return -1;
 }
 
-// /*
-//  * pseudOS: Returns the size, in bytes, of the file open as fd.
-//  */
-// int 
-// filesize (int fd)
-// {
-//   printf("system call: filesize\n");
-//   return -1;
-// }
+/*
+ * pseudOS: Returns the size, in bytes, of the file open as fd.
+ */
+int 
+filesize (int fd)
+{
+  return file_length ( (struct file *) thread_current ()->fds[fd - FD_INIT] );
+}
 
-// /*
-//  * pseudOS: Reads size bytes from the file open as fd into buffer. 
-//  * Returns the number of bytes actually read (0 at end of file), or -1 if the file could not be read 
-//  * (due to a condition other than end of file). Fd 0 reads from the keyboard using input_getc().
-//  */
-// int 
-// read (int fd, void *buffer, unsigned size)
-// {
-//   printf("system call: read\n");
-//   return -1;
-// }
+/*
+ * pseudOS: Reads size bytes from the file open as fd into buffer. 
+ * Returns the number of bytes actually read (0 at end of file), or -1 if the file could not be read 
+ * (due to a condition other than end of file). Fd 0 reads from the keyboard using input_getc().
+ */
+int 
+read (int fd, void *buffer, unsigned size)
+{
+ 	if(!is_valid_usr_ptr(buffer)) 
+ 		thread_exit();
+
+	if(fd == STDIN_FILENO)
+	{
+		uint8_t *buf = buffer;
+		unsigned i;
+		for(i = 0; i < size; i++)
+			buf[i] = input_getc();
+		return size;
+	} 
+	else if ( fd >= FD_INIT )
+	{
+		return file_read (
+			(struct file *) thread_current ()->fds[fd - FD_INIT],
+			buffer,
+			size );
+	}
+	return -1;
+}
 
 /*
  * pseudOS: Writes size bytes from buffer to the open file fd. 
@@ -202,11 +253,8 @@ open (const char *file)
  */
 int 
 write (int fd, const void *buffer, unsigned size)
-{
-  printf("system call: write - size: %u\n", size);
-  printf("valid ptr: %d\n", is_valid_usr_ptr(buffer));
- 
- 	if(!is_valid_usr_ptr(buffer)) 
+{ 
+ 	if( ! is_valid_usr_ptr (buffer) ) 
  		thread_exit();
 
   if(fd == STDOUT_FILENO)
@@ -214,38 +262,46 @@ write (int fd, const void *buffer, unsigned size)
   	putbuf(buffer, size);
   	return size;
   }
+  else if (fd >= FD_INIT)
+  {
+  	return file_write (
+			(struct file *) thread_current ()->fds[fd - FD_INIT],
+			buffer,
+			size );
+  }
   return 0;
 }
 
-// /*
-//  * pseudOS: Changes the next byte to be read or written in open file fd to position, 
-//  * expressed in bytes from the beginning of the file. (Thus, a position of 0 is the file's start.)
-//  */
-// void 
-// seek (int fd, unsigned position)
-// {
-//   printf("system call: seek\n");
-// }
+/*
+ * pseudOS: Changes the next byte to be read or written in open file fd to position, 
+ * expressed in bytes from the beginning of the file. (Thus, a position of 0 is the file's start.)
+ */
+void 
+seek (int fd, unsigned position)
+{
+	file_seek (
+		(struct file *) thread_current ()->fds[fd - FD_INIT], 
+		position );
+}
 
-// /* pseudOS: Returns the position of the next byte to be read or written in open file fd, 
-//  * expressed in bytes from the beginning of the file.
-//  */
-// unsigned 
-// tell (int fd)
-// {
-//   printf("system call: tell\n");
-//   return 0;
-// }
+/* pseudOS: Returns the position of the next byte to be read or written in open file fd, 
+ * expressed in bytes from the beginning of the file.
+ */
+unsigned 
+tell (int fd)
+{
+	return file_tell( (struct file *) thread_current ()->fds[fd - FD_INIT] ); 
+}
 
-// /*
-//  * pseudOS: Closes file descriptor fd. Exiting or terminating a process implicitly closes all its 
-//  * open file descriptors, as if by calling this function for each one.
-//  */
-// void 
-// close (int fd)
-// {
-//   printf("system call: close\n");
-// }
+/*
+ * pseudOS: Closes file descriptor fd. Exiting or terminating a process implicitly closes all its 
+ * open file descriptors, as if by calling this function for each one.
+ */
+void 
+close (int fd)
+{
+	file_close ( (struct file *) thread_current ()->fds[fd - FD_INIT] );
+}
 
 /* pseudOS: As part of a system call, the kernel must often access 
  * memory through pointers provided by a user program. The kernel 

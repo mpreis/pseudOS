@@ -582,12 +582,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   list_push_back (&all_list, &t->allelem);
-  
+
+  int i;
+  for(i = 0; i < FD_ARR_DEFAULT_LENGTH; i++)
+    t->fds[i] = NULL;
+
   list_init(&t->donations);   /* pseudOS */
   t->wanted_lock = NULL;      /* pseudOS */
   
-  list_init(&t->fds);         /* pseudOS */
-
   if(t == initial_thread) 
   {
     t->recent_cpu = convert_int_to_fp (0);
@@ -814,20 +816,6 @@ thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, voi
   
   return a->priority <= b->priority;
 }
-
-/* 
- * pseudOS: Returns true if value A is less or equal than value B, false
- * otherwise. 
- */
-bool 
-thread_fds_less (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED)
-{
-  const struct file_descriptor_t *a = list_entry (a_, struct file_descriptor_t, elem);
-  const struct file_descriptor_t *b = list_entry (b_, struct file_descriptor_t, elem);
-  
-  return a->fd < b->fd;
-}
-
 
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */

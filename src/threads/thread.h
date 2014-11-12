@@ -29,7 +29,9 @@ typedef int tid_t;
 #define NICE_DEFAULT 0			/* Default niceness. */
 #define NICE_MAX 20			/* Highest niceness. */
 
-#define FD_INIT 2   /* pseudOS */
+/* pseudOS */
+#define FD_INIT 2            
+#define FD_ARR_DEFAULT_LENGTH  128
 
 /* A kernel thread or user process.
 
@@ -118,17 +120,7 @@ struct thread
     int recent_cpu; 			       /* pseudOS: How much time recieved this thread recently. */
 
     /* pseudOS: Project 2 */
-    struct list fds;             /* pseudOS: This list holds pointers and file descriptors of all open files. */
-  };
-
-  /*
-   * pseudOS: Represents an entry in the fds list of a thread.
-   */
-  struct file_descriptor_t
-  {
-    int fd;
-    struct file *file_ptr;
-    struct list_elem elem;
+    int *fds[FD_ARR_DEFAULT_LENGTH];   /* pseudOS: This array holds pointers of all open files. */
   };
 
 /* If false (default), use round-robin scheduler.
@@ -173,7 +165,6 @@ int thread_get_load_avg (void);
  */
 // priority donation
 bool thread_priority_leq (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
-bool thread_fds_less (const struct list_elem *a_, const struct list_elem *b_, void *aux UNUSED);
 void thread_donate_priority(void);
 void thread_remove_donation (struct lock *lock);
 void thread_update_priority (void);
