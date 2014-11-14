@@ -2,6 +2,17 @@
 #define USERPROG_PROCESS_H
 
 #include "threads/thread.h"
+#include "userprog/syscall.h"
+
+/* pseudOS */
+struct child_process
+  {
+    struct list_elem childelem;
+    pid_t pid;
+    int exit_status;
+    struct thread *parent;
+    struct semaphore alive;            /* pseudOS: This semaphore shows that this thread is alive. */
+  };
 
 tid_t process_execute (const char *file_name);
 int process_wait (tid_t);

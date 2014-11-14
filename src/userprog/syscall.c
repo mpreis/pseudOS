@@ -8,9 +8,10 @@
 #include "filesys/filesys.h"
 #include "filesys/file.h"
 #include "pagedir.h"
-
+#include "process.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <list.h>
 
 #define OFFSET_ARG 4
 
@@ -43,12 +44,20 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		case SYS_EXIT: 
-			// pseudOS: maybe we have to increment the stack-pointer: f->esp += OFFSET_ARG1;
-			exit( *(int *)(f->esp + OFFSET_ARG) );
+			exit ( *(int *)(f->esp + OFFSET_ARG) );
+			f->esp += OFFSET_ARG * 2;
 			break;
 
-		// case SYS_EXEC: break; 
-		// case SYS_WAIT: break;
+		case SYS_EXEC: 
+			f->eax = exec ( *(char **)(f->esp + OFFSET_ARG) );
+			f->esp += OFFSET_ARG * 2;
+			break; 
+
+		case SYS_WAIT: 
+			f->eax = wait ( *(pid_t *)(f->esp + OFFSET_ARG) );
+			f->esp += OFFSET_ARG * 2;
+			break;
+
 		case SYS_CREATE: 
 			f->eax = create ( 
 				*(char **)(f->esp + OFFSET_ARG), 
@@ -116,7 +125,6 @@ syscall_handler (struct intr_frame *f)
 void
 halt (void)
 {
-  printf(" --- system call: halt\n");
   shutdown_power_off();
 }
 
@@ -126,32 +134,42 @@ halt (void)
 void 
 exit (int status)
 {
-  printf(" --- system call: exit(%d) \n", status);
-  thread_exit();
+	thread_current ()->child_info->exit_status = status;
+  thread_exit ();
 }
 
-// /*
-//  * pseudOS: Runs the executable whose name is given in cmd_line, passing any given arguments, 
-//  * and returns the new process's program id (pid). Must return pid -1, 
-//  * which otherwise should not be a valid pid, if the program cannot load or run for any reason. 
-//  */
-// pid_t 
-// exec (const char *cmd_line)
-// {
-//   printf("system call: exec\n");
-//   pid_t pid = -1;
-//   return pid;
-// }
+/*
+ * pseudOS: Runs the executable whose name is given in cmd_line, passing any given arguments, 
+ * and returns the new process's program id (pid). Must return pid -1, 
+ * which otherwise should not be a valid pid, if the program cannot load or run for any reason. 
+ */
+pid_t 
+exec (const char *cmd_line)
+{
+	return process_execute (cmd_line);
+}
 
-// /*
-//  * pseudOS: Waits for a child process pid and retrieves the child's exit status.
-//  */
-// int 
-// wait (pid_t pid)
-// {
-//   printf("system call: wait\n");
-//   return -1;
-// }
+/*
+ * pseudOS: Waits for a child process pid and retrieves the child's exit status.
+ */
+int 
+wait (pid_t pid)
+{
+	struct thread *t = thread_current ();
+	struct list_elem *e;
+	for (e = list_begin (&t->childs); e != list_end (&t->childs);
+       e = list_next (e))
+    {
+    	struct child_process *cp = list_entry (e, struct child_process, childelem);
+    	if(cp->pid == pid)
+    	{
+    		sema_down (&cp->alive);	// wait till child calls thread_exit
+    		sema_up (&cp->alive);
+    		return cp->exit_status;
+    	}
+    }
+  return -1;
+}
 
 /*
  * pseudOS: Creates a new file called file initially initial_size bytes in size. 

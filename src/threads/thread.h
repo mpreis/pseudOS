@@ -5,6 +5,8 @@
 #include <list.h>
 #include <stdint.h>
 
+#include "synch.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -32,6 +34,7 @@ typedef int tid_t;
 /* pseudOS */
 #define FD_INIT 2            
 #define FD_ARR_DEFAULT_LENGTH  128
+#define DEFAULT_EXIT_STATUS -1
 
 /* A kernel thread or user process.
 
@@ -121,6 +124,9 @@ struct thread
 
     /* pseudOS: Project 2 */
     int *fds[FD_ARR_DEFAULT_LENGTH];   /* pseudOS: This array holds pointers of all open files. */
+
+    struct list childs;                /* pseudOS: List of children */
+    struct child_process* child_info;  /* pseudOS */ 
   };
 
 /* If false (default), use round-robin scheduler.

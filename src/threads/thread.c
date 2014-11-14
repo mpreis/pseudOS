@@ -342,6 +342,8 @@ thread_exit (void)
   process_exit ();
 #endif
 
+  sema_down (&thread_current ()->child_info->alive);        /* pseudOS */
+
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
@@ -557,6 +559,8 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
+  printf(" ---- init start \n");
+      
   enum intr_level old_level;
 
   ASSERT (t != NULL);
@@ -583,12 +587,16 @@ init_thread (struct thread *t, const char *name, int priority)
 
   list_push_back (&all_list, &t->allelem);
 
+  // pseudOS
   int i;
   for(i = 0; i < FD_ARR_DEFAULT_LENGTH; i++)
     t->fds[i] = NULL;
 
-  list_init(&t->donations);   /* pseudOS */
-  t->wanted_lock = NULL;      /* pseudOS */
+  sema_init (&t->child_info->alive, 0);
+  list_init (&t->childs);
+
+  list_init (&t->donations);   /* pseudOS */
+  t->wanted_lock = NULL;       /* pseudOS */
   
   if(t == initial_thread) 
   {
@@ -598,10 +606,21 @@ init_thread (struct thread *t, const char *name, int priority)
   else
   {
     t->recent_cpu = thread_current ()->recent_cpu;	/* pseudOS */
-    t->niceness = thread_current ()->niceness;		/* pseudOS */
+    t->niceness = thread_current ()->niceness;		  /* pseudOS */
+
+    t->child_info->pid = t->tid;
+    t->child_info->parent = thread_current ();
+    t->child_info->exit_status = DEFAULT_EXIT_STATUS;
+
+    sema_down (&thread_current ()->child_info->alive); /* pseudOS */
+    list_push_back (&thread_current ()->childs, &t->child_info->childelem);
+
   }
   
   intr_set_level (old_level);
+
+  printf(" ---- init end \n");
+      
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
