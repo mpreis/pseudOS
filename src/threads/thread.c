@@ -265,8 +265,6 @@ thread_create (const char *name, int priority,
   
   thread_priority_check ();	// pseudOS: check if there is a thread with a higher priority
   intr_set_level (old_level);
-  
-  printf(" --- end create \n");
 
   return tid;
 }
@@ -355,7 +353,7 @@ thread_exit (void)
   process_exit ();
 #endif
 
-  sema_down (&thread_current ()->child_info->alive);        /* pseudOS */
+  sema_up (&thread_current ()->child_info->alive);        /* pseudOS */
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us

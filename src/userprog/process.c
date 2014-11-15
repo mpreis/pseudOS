@@ -28,7 +28,6 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp, char **a
 tid_t
 process_execute (const char *file_name) 
 {
-  printf("process_execute\n");
   char *fn_copy, *save_ptr;
   tid_t tid;
 
@@ -202,7 +201,7 @@ struct Elf32_Phdr
 #define PF_R 4          /* Readable. */
 
 static bool setup_stack (void **esp);
-static bool init_stack (void **esp, char **argv);
+static bool init_stack (const char *file_name, void **esp, char **argv);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -313,7 +312,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
     goto done;
 
   /* pseudOS: init stack */
-  if (!init_stack (esp, argv))
+  if (!init_stack (file_name, esp, argv))
     goto done;
 
   /* Start address. */
@@ -324,6 +323,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
  done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+
   return success;
 }
 
@@ -452,13 +452,13 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
-
+  // pseudOS: TODO - call here init_stack!!!
   return success;
 }
 
 /* pseudOS: Initialize the stack with all startup information for argument passing. */
 static bool
-init_stack (void **esp, char **argv) 
+init_stack (const char *file_name, void **esp, char **argv) 
 {
   // pseudOS: push all function parameters on the stack
   char *token, *save_ptr;
@@ -475,13 +475,15 @@ init_stack (void **esp, char **argv)
     argc++;
   }
   argv_ptr[argc] = NULL;
-
+  *esp -= strlen(file_name) + 1;
+  memcpy(*esp, file_name, strlen(file_name) + 1);
+    
   //pseudOS: push word align on the stack
   int word_align = (int) *esp % 4;
   if(word_align < 0) word_align += 4;
   *esp -= word_align;
   memcpy(*esp, &argv_ptr[argc], word_align);
-
+  
   //pseudOS: push all pointers to argv_ptr on the stack
   int i;
   for(i = argc; i >= 0; i--)
@@ -505,8 +507,6 @@ init_stack (void **esp, char **argv)
   memcpy(*esp, &n, sizeof(void *));
 
   palloc_free_page(argv_ptr);
-
-  printf(" --- end \n");
 
   return true;
 }

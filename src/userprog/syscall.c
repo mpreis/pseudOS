@@ -34,8 +34,7 @@ syscall_handler (struct intr_frame *f)
 	if(!is_valid_usr_ptr(f->esp)) 
  		thread_exit();
 
-  uint32_t syscall_nr = *(uint32_t *) (f->esp);
-	switch(syscall_nr)
+  switch(*(uint32_t *) (f->esp))
 	{
 		case SYS_HALT: 
 			halt();
@@ -43,39 +42,32 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_EXIT: 
 			exit ( *(int *)(f->esp + OFFSET_ARG) );
-			f->esp += OFFSET_ARG * 2;
 			break;
 
 		case SYS_EXEC: 
 			f->eax = exec ( *(char **)(f->esp + OFFSET_ARG) );
-			f->esp += OFFSET_ARG * 2;
 			break; 
 
 		case SYS_WAIT: 
 			f->eax = wait ( *(pid_t *)(f->esp + OFFSET_ARG) );
-			f->esp += OFFSET_ARG * 2;
 			break;
 
 		case SYS_CREATE: 
 			f->eax = create ( 
 				*(char **)(f->esp + OFFSET_ARG), 
 				*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
-			f->esp += OFFSET_ARG * 3;
 			break;
 
 		case SYS_REMOVE: 
 			f->eax = remove ( *(char **)(f->esp + OFFSET_ARG) );
-			f->esp += OFFSET_ARG * 2;
 			break;
 
 		case SYS_OPEN: 
 			f->eax = open ( *(char **)(f->esp + OFFSET_ARG) );
-			f->esp += OFFSET_ARG * 2;
 			break;
 
 		case SYS_FILESIZE: 
 			f->eax = filesize ( *(int *)(f->esp + OFFSET_ARG) );
-			f->esp += OFFSET_ARG * 2;
 			break;
 
 		case SYS_READ:
@@ -83,7 +75,6 @@ syscall_handler (struct intr_frame *f)
 				*(int *)(f->esp + (OFFSET_ARG * 1)), 
 				*(char **)(f->esp + (OFFSET_ARG * 2)), 
 				*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );	
-			f->esp += OFFSET_ARG * 4;
 			break;
 		
 		case SYS_WRITE:
@@ -91,27 +82,22 @@ syscall_handler (struct intr_frame *f)
 				*(int *)(f->esp + (OFFSET_ARG * 1)), 
 				*(char **)(f->esp + (OFFSET_ARG * 2)), 
 				*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );
-			f->esp += OFFSET_ARG * 4;
 			break;
 
 		case SYS_SEEK: 
 			seek( 
 				*(int *)(f->esp + (OFFSET_ARG * 1)), 
 				*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
-			f->esp += OFFSET_ARG * 3;
 			break;
 
 		case SYS_TELL: 
 			f->eax = tell ( *(int *)(f->esp + (OFFSET_ARG * 1)) );
-			f->esp += OFFSET_ARG * 2;
 			break;
 
 		case SYS_CLOSE: 
 			close ( *(int *)(f->esp + (OFFSET_ARG * 1)) );
-			f->esp += OFFSET_ARG * 2;
 			break;
 		default:
-			printf("ERROR: invalid system call (%d)! \n", syscall_nr); 
 			thread_exit ();         
 	}
 }
@@ -122,7 +108,7 @@ syscall_handler (struct intr_frame *f)
 void
 halt (void)
 {
-  shutdown_power_off();
+	shutdown_power_off();
 }
 
 /*
@@ -175,9 +161,9 @@ wait (pid_t pid)
 bool 
 create (const char *file, unsigned initial_size)
 {
- 	if(!is_valid_usr_ptr(file)) 
+ 	if( ! is_valid_usr_ptr (file) ) 
  		thread_exit();
-
+	
 	return filesys_create (file, initial_size); 
 }
 
@@ -187,7 +173,7 @@ create (const char *file, unsigned initial_size)
 bool 
 remove (const char *file)
 {
- 	if(!is_valid_usr_ptr(file)) 
+ 	if( ! is_valid_usr_ptr (file) ) 
  		thread_exit();
 
   return filesys_remove (file);
@@ -200,7 +186,7 @@ remove (const char *file)
 int 
 open (const char *file)
 {
- 	if(!is_valid_usr_ptr(file)) 
+ 	if( ! is_valid_usr_ptr (file) ) 
  		thread_exit();
 
 	struct file *f = filesys_open (file);
@@ -240,7 +226,7 @@ filesize (int fd)
 int 
 read (int fd, void *buffer, unsigned size)
 {
- 	if(!is_valid_usr_ptr(buffer)) 
+	if( ! is_valid_usr_ptr (buffer) ) 
  		thread_exit();
 
 	if(fd == STDIN_FILENO)
@@ -269,7 +255,7 @@ read (int fd, void *buffer, unsigned size)
 int 
 write (int fd, const void *buffer, unsigned size)
 { 
- 	if( ! is_valid_usr_ptr (buffer) ) 
+	if( ! is_valid_usr_ptr (buffer) ) 
  		thread_exit();
 
   if(fd == STDOUT_FILENO)
