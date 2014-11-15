@@ -12,6 +12,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/fixed-point.h"
+#include "threads/malloc.h"
 
 #include "../devices/timer.h"
 
@@ -244,6 +245,16 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  struct child_process *cp = malloc(sizeof(struct child_process));
+  cp->pid = t->tid;
+  cp->parent = thread_current ();
+  cp->exit_status = DEFAULT_EXIT_STATUS;
+  t->child_info = cp;
+
+  sema_init (&t->child_info->alive, 1);
+  sema_down (&t->child_info->alive); /* pseudOS */
+  list_push_back (&thread_current ()->childs, &t->child_info->childelem);
+
   intr_set_level (old_level);
   
   /* Add to run queue. */
@@ -255,6 +266,8 @@ thread_create (const char *name, int priority,
   thread_priority_check ();	// pseudOS: check if there is a thread with a higher priority
   intr_set_level (old_level);
   
+  printf(" --- end create \n");
+
   return tid;
 }
 
@@ -559,8 +572,6 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
-  printf(" ---- init start \n");
-      
   enum intr_level old_level;
 
   ASSERT (t != NULL);
@@ -586,13 +597,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   list_push_back (&all_list, &t->allelem);
+  t->child_info = NULL;
 
   // pseudOS
   int i;
   for(i = 0; i < FD_ARR_DEFAULT_LENGTH; i++)
     t->fds[i] = NULL;
 
-  sema_init (&t->child_info->alive, 0);
   list_init (&t->childs);
 
   list_init (&t->donations);   /* pseudOS */
@@ -607,20 +618,9 @@ init_thread (struct thread *t, const char *name, int priority)
   {
     t->recent_cpu = thread_current ()->recent_cpu;	/* pseudOS */
     t->niceness = thread_current ()->niceness;		  /* pseudOS */
-
-    t->child_info->pid = t->tid;
-    t->child_info->parent = thread_current ();
-    t->child_info->exit_status = DEFAULT_EXIT_STATUS;
-
-    sema_down (&thread_current ()->child_info->alive); /* pseudOS */
-    list_push_back (&thread_current ()->childs, &t->child_info->childelem);
-
   }
   
-  intr_set_level (old_level);
-
-  printf(" ---- init end \n");
-      
+  intr_set_level (old_level);   
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

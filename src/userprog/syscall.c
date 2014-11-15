@@ -35,8 +35,6 @@ syscall_handler (struct intr_frame *f)
  		thread_exit();
 
   uint32_t syscall_nr = *(uint32_t *) (f->esp);
-	
-	printf (" --- system call! (%u)\n", syscall_nr);	
 	switch(syscall_nr)
 	{
 		case SYS_HALT: 
@@ -113,10 +111,9 @@ syscall_handler (struct intr_frame *f)
 			f->esp += OFFSET_ARG * 2;
 			break;
 		default:
-		printf("ERROR: invalid system call (%d)! \n", syscall_nr);          
+			printf("ERROR: invalid system call (%d)! \n", syscall_nr); 
+			thread_exit ();         
 	}
-
-  thread_exit ();
 }
 
 /*

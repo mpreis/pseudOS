@@ -94,8 +94,7 @@ int
 process_wait (tid_t child_tid) 
 {
   // pseudOS
-  wait (child_tid);
-  return -1;
+  return wait (child_tid);
 }
 
 /* Free the current process's resources. */
