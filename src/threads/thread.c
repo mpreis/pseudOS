@@ -6,6 +6,7 @@
 #include <string.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
+#include "threads/malloc.h"
 #include "threads/intr-stubs.h"
 #include "threads/palloc.h"
 #include "threads/switch.h"
@@ -213,7 +214,7 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
-  
+  //printf("thread_create start\n");
   enum intr_level old_level;
 
   ASSERT (function != NULL);
@@ -246,15 +247,31 @@ thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
   
+  /* pseudOS */
+  //printf("thread_create mitte\n");
+
+  struct child_process *cp = malloc(sizeof(struct child_process));
+
+  cp->pid = t->tid;
+  cp->parent = thread_current ();
+  cp->exit_status = DEFAULT_EXIT_STATUS;
+
+  //printf("thread_create mitte 2\n");
+  sema_init (&cp->alive, 0);
+  sema_down (&cp->alive); 
+  list_push_back (&thread_current ()->childs, &cp->childelem);
+  t->child_info = cp;
+
   /* Add to run queue. */
   thread_unblock (t);
-  
+
   /* pseudOS */
   old_level = intr_disable ();
   
   thread_priority_check ();	// pseudOS: check if there is a thread with a higher priority
   intr_set_level (old_level);
   
+  //printf("thread_create end\n");
   return tid;
 }
 
@@ -592,8 +609,8 @@ init_thread (struct thread *t, const char *name, int priority)
   for(i = 0; i < FD_ARR_DEFAULT_LENGTH; i++)
     t->fds[i] = NULL;
 
-  sema_init (&t->child_info->alive, 0);
   list_init (&t->childs);
+  t->child_info = NULL;
 
   list_init (&t->donations);   /* pseudOS */
   t->wanted_lock = NULL;       /* pseudOS */
@@ -607,14 +624,6 @@ init_thread (struct thread *t, const char *name, int priority)
   {
     t->recent_cpu = thread_current ()->recent_cpu;	/* pseudOS */
     t->niceness = thread_current ()->niceness;		  /* pseudOS */
-
-    t->child_info->pid = t->tid;
-    t->child_info->parent = thread_current ();
-    t->child_info->exit_status = DEFAULT_EXIT_STATUS;
-
-    sema_down (&thread_current ()->child_info->alive); /* pseudOS */
-    list_push_back (&thread_current ()->childs, &t->child_info->childelem);
-
   }
   
   intr_set_level (old_level);
