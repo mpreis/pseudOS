@@ -163,7 +163,7 @@ wait (pid_t pid)
 bool 
 create (const char *file, unsigned initial_size)
 {
- 	if( ! is_valid_usr_ptr (file) ) 
+ 	if( ! is_valid_usr_ptr (file) || file == NULL) 
  		exit(-1);
 	
 	return filesys_create (file, initial_size); 
@@ -188,11 +188,11 @@ remove (const char *file)
 int 
 open (const char *file)
 {
- 	if( ! is_valid_usr_ptr (file) ) 
+ 	if( ! is_valid_usr_ptr (file) || file == NULL) 
  		exit(-1);
 
 	struct file *f = filesys_open (file);
-	if(file != NULL)
+	if(f)
 	{
 		struct thread *t = thread_current ();
 		int fds_size = sizeof (t->fds) / sizeof (t->fds[0]);
@@ -208,6 +208,7 @@ open (const char *file)
 		int fd = i + FD_INIT;
 		return fd;
 	}
+
   return -1;
 }
 
@@ -228,7 +229,7 @@ filesize (int fd)
 int 
 read (int fd, void *buffer, unsigned size)
 {
-	if( ! is_valid_usr_ptr (buffer) ) 
+	if( !is_valid_usr_ptr (buffer) || fd < 0 || fd >= FD_ARR_DEFAULT_LENGTH ) 
  		exit(-1);
 
 	if(fd == STDIN_FILENO)
@@ -257,7 +258,7 @@ read (int fd, void *buffer, unsigned size)
 int 
 write (int fd, const void *buffer, unsigned size)
 { 
-  if( ! is_valid_usr_ptr (buffer) ) 
+  if( !is_valid_usr_ptr (buffer) || fd < 0 || fd >= FD_ARR_DEFAULT_LENGTH ) 
  	exit(-1);
 
   if(fd == STDOUT_FILENO)
@@ -303,6 +304,8 @@ tell (int fd)
 void 
 close (int fd)
 {
+	if(fd <= 2 || fd >= FD_ARR_DEFAULT_LENGTH)
+		return;
 	file_close ( (struct file *) thread_current ()->fds[fd - FD_INIT] );
 }
 
