@@ -13,6 +13,7 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #include "threads/fixed-point.h"
+#include "threads/malloc.h"
 
 #include "../devices/timer.h"
 
@@ -245,6 +246,16 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  struct child_process *cp = malloc(sizeof(struct child_process));
+  cp->pid = t->tid;
+  cp->parent = thread_current ();
+  cp->exit_status = DEFAULT_EXIT_STATUS;
+  t->child_info = cp;
+
+  sema_init (&t->child_info->alive, 1);
+  sema_down (&t->child_info->alive); /* pseudOS */
+  list_push_back (&thread_current ()->childs, &t->child_info->childelem);
+
   intr_set_level (old_level);
   
   /* pseudOS */
@@ -270,8 +281,6 @@ thread_create (const char *name, int priority,
   
   thread_priority_check ();	// pseudOS: check if there is a thread with a higher priority
   intr_set_level (old_level);
-  
-  //printf("thread_create end\n");
   return tid;
 }
 
@@ -359,7 +368,7 @@ thread_exit (void)
   process_exit ();
 #endif
 
-  sema_down (&thread_current ()->child_info->alive);        /* pseudOS */
+  sema_up (&thread_current ()->child_info->alive);        /* pseudOS */
 
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
@@ -576,8 +585,6 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
-  printf(" ---- init start \n");
-      
   enum intr_level old_level;
 
   ASSERT (t != NULL);
@@ -603,6 +610,7 @@ init_thread (struct thread *t, const char *name, int priority)
   t->magic = THREAD_MAGIC;
 
   list_push_back (&all_list, &t->allelem);
+  t->child_info = NULL;
 
   // pseudOS
   int i;
@@ -626,10 +634,7 @@ init_thread (struct thread *t, const char *name, int priority)
     t->niceness = thread_current ()->niceness;		  /* pseudOS */
   }
   
-  intr_set_level (old_level);
-
-  printf(" ---- init end \n");
-      
+  intr_set_level (old_level);   
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
