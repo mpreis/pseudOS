@@ -452,7 +452,7 @@ setup_stack (void **esp)
       else
         palloc_free_page (kpage);
     }
-  // pseudOS: TODO - call here init_stack!!!
+    
   return success;
 }
 
@@ -461,20 +461,20 @@ static bool
 init_stack (const char *file_name, void **esp, char **argv) 
 {
   // pseudOS: push all function parameters on the stack
-  char *token, *save_ptr;
-  char **argv_ptr = palloc_get_page(PAL_USER);
+  char *token;
+  char **argv_ptrs = palloc_get_page(PAL_USER);
   int argc = 0;
 
   //pseudOS: push all data of args on the stack
-  for (token = strtok_r (*argv, " ", &save_ptr) ;token != NULL;
-       token = strtok_r (NULL, " ", &save_ptr))
+  for (token = (char *) file_name ;token != NULL;
+       token = strtok_r (NULL, " ", argv))
   {
     *esp -= strlen(token) + 1;
-    argv_ptr[argc] = *esp;
+    argv_ptrs[argc] = *esp;
     memcpy(*esp, token, strlen(token) + 1);
     argc++;
   }
-  argv_ptr[argc] = NULL;
+  argv_ptrs[argc] = NULL;
   *esp -= strlen(file_name) + 1;
   memcpy(*esp, file_name, strlen(file_name) + 1);
     
@@ -482,17 +482,17 @@ init_stack (const char *file_name, void **esp, char **argv)
   int word_align = (int) *esp % 4;
   if(word_align < 0) word_align += 4;
   *esp -= word_align;
-  memcpy(*esp, &argv_ptr[argc], word_align);
+  memcpy(*esp, &argv_ptrs[argc], word_align);
   
-  //pseudOS: push all pointers to argv_ptr on the stack
+  //pseudOS: push all pointers to argv_ptrs on the stack
   int i;
   for(i = argc; i >= 0; i--)
   {
     *esp -= sizeof(char *);
-    memcpy(*esp, &argv_ptr[i], sizeof(char *));
+    memcpy(*esp, &argv_ptrs[i], sizeof(char *));
   }
 
-  //pseudOS: push pointer to argv_ptr[0] on the stack
+  //pseudOS: push pointer to argv_ptrs[0] on the stack
   char *ptr_to_argv = *esp;
   *esp -= sizeof(char *);
   memcpy(*esp, &ptr_to_argv, sizeof(char *));
@@ -506,7 +506,7 @@ init_stack (const char *file_name, void **esp, char **argv)
   *esp -= sizeof(void *);
   memcpy(*esp, &n, sizeof(void *));
 
-  palloc_free_page(argv_ptr);
+  palloc_free_page(argv_ptrs);
 
   return true;
 }

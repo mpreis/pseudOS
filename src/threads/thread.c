@@ -258,21 +258,6 @@ thread_create (const char *name, int priority,
 
   intr_set_level (old_level);
   
-  /* pseudOS */
-  //printf("thread_create mitte\n");
-
-  struct child_process *cp = malloc(sizeof(struct child_process));
-
-  cp->pid = t->tid;
-  cp->parent = thread_current ();
-  cp->exit_status = DEFAULT_EXIT_STATUS;
-
-  //printf("thread_create mitte 2\n");
-  sema_init (&cp->alive, 0);
-  sema_down (&cp->alive); 
-  list_push_back (&thread_current ()->childs, &cp->childelem);
-  t->child_info = cp;
-
   /* Add to run queue. */
   thread_unblock (t);
 

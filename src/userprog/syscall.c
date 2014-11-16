@@ -32,7 +32,8 @@ void
 syscall_handler (struct intr_frame *f) 
 {
 	if(!is_valid_usr_ptr(f->esp)) 
- 		thread_exit();
+		exit(-1);
+ 		//thread_exit();
 
   switch(*(uint32_t *) (f->esp))
 	{
@@ -98,7 +99,7 @@ syscall_handler (struct intr_frame *f)
 			close ( *(int *)(f->esp + (OFFSET_ARG * 1)) );
 			break;
 		default:
-			thread_exit ();         
+			exit (-1);         
 	}
 }
 
@@ -118,7 +119,8 @@ void
 exit (int status)
 {
 	thread_current ()->child_info->exit_status = status;
-  thread_exit ();
+	printf("%s: exit(%d)\n", thread_current ()->name, status);
+	thread_exit ();
 }
 
 /*
@@ -162,7 +164,7 @@ bool
 create (const char *file, unsigned initial_size)
 {
  	if( ! is_valid_usr_ptr (file) ) 
- 		thread_exit();
+ 		exit(-1);
 	
 	return filesys_create (file, initial_size); 
 }
@@ -174,7 +176,7 @@ bool
 remove (const char *file)
 {
  	if( ! is_valid_usr_ptr (file) ) 
- 		thread_exit();
+ 		exit(-1);
 
   return filesys_remove (file);
 }
@@ -187,7 +189,7 @@ int
 open (const char *file)
 {
  	if( ! is_valid_usr_ptr (file) ) 
- 		thread_exit();
+ 		exit(-1);
 
 	struct file *f = filesys_open (file);
 	if(file != NULL)
@@ -227,7 +229,7 @@ int
 read (int fd, void *buffer, unsigned size)
 {
 	if( ! is_valid_usr_ptr (buffer) ) 
- 		thread_exit();
+ 		exit(-1);
 
 	if(fd == STDIN_FILENO)
 	{
@@ -255,8 +257,8 @@ read (int fd, void *buffer, unsigned size)
 int 
 write (int fd, const void *buffer, unsigned size)
 { 
-	if( ! is_valid_usr_ptr (buffer) ) 
- 		thread_exit();
+  if( ! is_valid_usr_ptr (buffer) ) 
+ 	exit(-1);
 
   if(fd == STDOUT_FILENO)
   {
@@ -270,7 +272,7 @@ write (int fd, const void *buffer, unsigned size)
 			buffer,
 			size );
   }
-  return 0;
+  return -1;
 }
 
 /*
@@ -317,7 +319,9 @@ static bool
 is_valid_usr_ptr(const void * ptr)
 {
 	// a pointer to unmapped virtual memory
-	return (ptr != NULL)
+	if( (ptr != NULL)
 				&& is_user_vaddr(ptr)
-				&& pagedir_get_page(thread_current()->pagedir, ptr) != (void *)NULL;	
+				&& pagedir_get_page(thread_current()->pagedir, ptr) != (void *)NULL) 
+		return 1;
+	return -1;	
 }
