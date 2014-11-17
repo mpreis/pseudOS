@@ -3,6 +3,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 #include "devices/shutdown.h"
 #include "devices/input.h"
 #include "filesys/filesys.h"
@@ -15,8 +16,11 @@
 
 #define OFFSET_ARG 4
 
+struct lock filesys_lock;
+
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_usr_ptr(const void * ptr);
+static bool is_valid_fd(int fd);
 
 /* TODO:
  *  - remove printfs -> tests won't work within prints
@@ -25,6 +29,7 @@ static bool is_valid_usr_ptr(const void * ptr);
 void
 syscall_init (void) 
 {
+	lock_init (&filesys_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -33,16 +38,17 @@ syscall_handler (struct intr_frame *f)
 {
 	if(!is_valid_usr_ptr(f->esp)) 
 		exit(-1);
- 		//thread_exit();
 
-  switch(*(uint32_t *) (f->esp))
+	switch(*(uint32_t *) (f->esp))
 	{
 		case SYS_HALT: 
 			halt();
 			break;
 
 		case SYS_EXIT: 
-			exit ( *(int *)(f->esp + OFFSET_ARG) );
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
+				exit ( *(int *)(f->esp + OFFSET_ARG) );
+			else exit(-1);
 			break;
 
 		case SYS_EXEC: 
@@ -98,6 +104,7 @@ syscall_handler (struct intr_frame *f)
 		case SYS_CLOSE: 
 			close ( *(int *)(f->esp + (OFFSET_ARG * 1)) );
 			break;
+
 		default:
 			exit (-1);         
 	}
@@ -131,6 +138,8 @@ exit (int status)
 pid_t 
 exec (const char *cmd_line)
 {
+	if( ! is_valid_usr_ptr (cmd_line) ) 
+ 		exit(-1);
 	return process_execute (cmd_line);
 }
 
@@ -149,7 +158,6 @@ wait (pid_t pid)
     	if(cp->pid == pid)
     	{
     		sema_down (&cp->alive);	// wait till child calls thread_exit
-    		sema_up (&cp->alive);
     		return cp->exit_status;
     	}
     }
@@ -163,7 +171,7 @@ wait (pid_t pid)
 bool 
 create (const char *file, unsigned initial_size)
 {
- 	if( ! is_valid_usr_ptr (file) || file == NULL) 
+ 	if( ! is_valid_usr_ptr (file) ) 
  		exit(-1);
 	
 	return filesys_create (file, initial_size); 
@@ -188,8 +196,10 @@ remove (const char *file)
 int 
 open (const char *file)
 {
- 	if( ! is_valid_usr_ptr (file) || file == NULL) 
+ 	if( ! is_valid_usr_ptr (file) ) 
  		exit(-1);
+
+ 	lock_acquire (&filesys_lock);
 
 	struct file *f = filesys_open (file);
 	if(f)
@@ -202,13 +212,18 @@ open (const char *file)
 			if(t->fds[i] == NULL)	break;
 
 		if(i == fds_size) 
+		{
+			lock_release (&filesys_lock);
 			return -1; // fds array to small
-
+		}
 		t->fds[i] = (int *) f;
 		int fd = i + FD_INIT;
+
+		lock_release (&filesys_lock);
 		return fd;
 	}
 
+	lock_release (&filesys_lock);
   return -1;
 }
 
@@ -218,6 +233,9 @@ open (const char *file)
 int 
 filesize (int fd)
 {
+	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
+		exit(-1);
+
   return file_length ( (struct file *) thread_current ()->fds[fd - FD_INIT] );
 }
 
@@ -229,8 +247,10 @@ filesize (int fd)
 int 
 read (int fd, void *buffer, unsigned size)
 {
-	if( !is_valid_usr_ptr (buffer) || fd < 0 || fd >= FD_ARR_DEFAULT_LENGTH ) 
+	if( !is_valid_usr_ptr (buffer) || !is_valid_fd(fd) ) 
  		exit(-1);
+
+ 	lock_acquire (&filesys_lock);
 
 	if(fd == STDIN_FILENO)
 	{
@@ -238,15 +258,20 @@ read (int fd, void *buffer, unsigned size)
 		unsigned i;
 		for(i = 0; i < size; i++)
 			buf[i] = input_getc();
+
+		lock_release (&filesys_lock);
 		return size;
 	} 
-	else if ( fd >= FD_INIT )
+	else if ( fd >= FD_INIT && thread_current ()->fds[fd - FD_INIT] != NULL )
 	{
-		return file_read (
+		int r = file_read (
 			(struct file *) thread_current ()->fds[fd - FD_INIT],
 			buffer,
 			size );
+		lock_release (&filesys_lock);
+		return r;
 	}
+	lock_release (&filesys_lock);
 	return -1;
 }
 
@@ -258,21 +283,27 @@ read (int fd, void *buffer, unsigned size)
 int 
 write (int fd, const void *buffer, unsigned size)
 { 
-  if( !is_valid_usr_ptr (buffer) || fd < 0 || fd >= FD_ARR_DEFAULT_LENGTH ) 
- 	exit(-1);
+	if( !is_valid_usr_ptr (buffer) || !is_valid_fd(fd) ) 
+ 		exit(-1);
+
+ 	lock_acquire (&filesys_lock);
 
   if(fd == STDOUT_FILENO)
   {
   	putbuf(buffer, size);
+  	lock_release(&filesys_lock);
   	return size;
   }
-  else if (fd >= FD_INIT)
+  else if (fd >= FD_INIT && thread_current ()->fds[fd - FD_INIT] != NULL )
   {
-  	return file_write (
+  	int r = file_write (
 			(struct file *) thread_current ()->fds[fd - FD_INIT],
 			buffer,
 			size );
+  	lock_release (&filesys_lock);
+  	return r;
   }
+  lock_release (&filesys_lock);
   return -1;
 }
 
@@ -283,9 +314,14 @@ write (int fd, const void *buffer, unsigned size)
 void 
 seek (int fd, unsigned position)
 {
+	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
+		exit(-1);
+
+	lock_acquire (&filesys_lock);
 	file_seek (
 		(struct file *) thread_current ()->fds[fd - FD_INIT], 
 		position );
+	lock_release (&filesys_lock);
 }
 
 /* pseudOS: Returns the position of the next byte to be read or written in open file fd, 
@@ -294,6 +330,8 @@ seek (int fd, unsigned position)
 unsigned 
 tell (int fd)
 {
+	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
+		exit(-1);
 	return file_tell( (struct file *) thread_current ()->fds[fd - FD_INIT] ); 
 }
 
@@ -304,9 +342,13 @@ tell (int fd)
 void 
 close (int fd)
 {
-	if(fd <= 2 || fd >= FD_ARR_DEFAULT_LENGTH)
+	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL)
 		return;
+
+	lock_acquire (&filesys_lock);
 	file_close ( (struct file *) thread_current ()->fds[fd - FD_INIT] );
+	thread_current ()->fds[fd - FD_INIT] = NULL;
+	lock_release (&filesys_lock);
 }
 
 /* pseudOS: As part of a system call, the kernel must often access 
@@ -324,7 +366,18 @@ is_valid_usr_ptr(const void * ptr)
 	// a pointer to unmapped virtual memory
 	if( (ptr != NULL)
 				&& is_user_vaddr(ptr)
-				&& pagedir_get_page(thread_current()->pagedir, ptr) != (void *)NULL) 
-		return 1;
-	return -1;	
+				&& pagedir_get_page(thread_current()->pagedir, ptr) != 0) 
+	{
+		return true;
+	}
+	return false;	
+}
+
+/*
+ * pseudOS: Checks if the give fd has a valid value.
+ */
+static bool
+is_valid_fd(int fd)
+{
+	 return (0 <= fd && fd < FD_ARR_DEFAULT_LENGTH);
 }
