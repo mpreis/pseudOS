@@ -174,7 +174,10 @@ create (const char *file, unsigned initial_size)
  	if( ! is_valid_usr_ptr (file) ) 
  		exit(-1);
 	
-	return filesys_create (file, initial_size); 
+	lock_acquire (&filesys_lock);
+	bool b = filesys_create (file, initial_size); 
+	lock_release (&filesys_lock);
+	return b;
 }
 
 /*
@@ -186,7 +189,10 @@ remove (const char *file)
  	if( ! is_valid_usr_ptr (file) ) 
  		exit(-1);
 
-  return filesys_remove (file);
+	lock_acquire (&filesys_lock);
+	bool b = filesys_remove (file);
+	lock_release (&filesys_lock);
+  return b;
 }
 
 /*
