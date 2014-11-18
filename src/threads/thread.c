@@ -252,8 +252,11 @@ thread_create (const char *name, int priority,
   cp->exit_status = DEFAULT_EXIT_STATUS;
   t->child_info = cp;
 
+  t->child_info->parent_is_waiting = false;
+  t->child_info->load_status = LOAD_STATUS_INIT;
   sema_init (&t->child_info->alive, 1);
   sema_down (&t->child_info->alive); /* pseudOS */
+  
   list_push_back (&thread_current ()->childs, &t->child_info->childelem);
 
   intr_set_level (old_level);
@@ -934,3 +937,22 @@ thread_mlfqs_update_properties (void)
     e = list_next(e);
   }
 }
+
+/*
+ * pseudOS
+ */
+ struct child_process *
+ thread_get_child (int pid)
+ {
+    struct thread *t = thread_current ();
+    struct list_elem *e;
+    struct child_process *cp;
+    for (e = list_begin (&t->childs); e != list_end (&t->childs);
+         e = list_next (e))
+      {
+        cp = list_entry (e, struct child_process, childelem);
+        if(cp->pid == pid)
+          return cp;
+    }
+    return NULL;
+ }

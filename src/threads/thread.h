@@ -7,6 +7,7 @@
 
 #include "synch.h"
 
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -180,5 +181,8 @@ void thread_mlfqs_calc_priority (struct thread *t, void *aux UNUSED);
 void thread_mlfqs_calc_recent_cpu (struct thread *t, void *aux UNUSED);
 void thread_mlfqs_calc_load_avg (void);
 void thread_mlfqs_update_properties (void);
+
+/* pseudOS */
+struct child_process *thread_get_child (int pid);
 
 #endif /* threads/thread.h */

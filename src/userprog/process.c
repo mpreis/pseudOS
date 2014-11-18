@@ -34,6 +34,7 @@ process_execute (const char *file_name)
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
+
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
@@ -43,6 +44,7 @@ process_execute (const char *file_name)
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
+  
   if (tid == TID_ERROR)
     palloc_free_page (fn_copy); 
   return tid;
@@ -68,7 +70,11 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   if (!success) 
-    exit (-1);
+  {
+    thread_current ()->child_info->load_status = LOAD_STATUS_FAIL;
+    thread_exit ();
+  }
+  thread_current ()->child_info->load_status = LOAD_STATUS_SUCCESS;  
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
