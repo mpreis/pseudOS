@@ -22,10 +22,6 @@ static void syscall_handler (struct intr_frame *);
 static bool is_valid_usr_ptr(const void * ptr);
 static bool is_valid_fd(int fd);
 
-/* TODO:
- *  - remove printfs -> tests won't work within prints
- */
-
 void
 syscall_init (void) 
 {
@@ -163,7 +159,7 @@ wait (pid_t pid)
 	if(cp != NULL && !cp->parent_is_waiting)
 	{
 		cp->parent_is_waiting = true;
-		sema_down (&cp->alive);	// wait till child calls thread_exit
+		sema_down (&cp->alive);
 		return cp->exit_status;
 	}
   return -1;
@@ -374,7 +370,6 @@ close (int fd)
 static bool
 is_valid_usr_ptr(const void * ptr)
 {
-	// a pointer to unmapped virtual memory
 	if( (ptr != NULL)
 				&& is_user_vaddr(ptr)
 				&& pagedir_get_page(thread_current()->pagedir, ptr) != 0) 
