@@ -3,6 +3,7 @@
 
 #include "threads/thread.h"
 #include "userprog/syscall.h"
+#include "filesys/file.h"
 
 #define LOAD_STATUS_SUCCESS 1
 #define LOAD_STATUS_FAIL 0
@@ -24,5 +25,6 @@ tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
+bool is_elf_executable(struct file *file);
 
 #endif /* userprog/process.h */

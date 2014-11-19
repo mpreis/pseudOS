@@ -9,7 +9,6 @@
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
-#include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "threads/flags.h"
 #include "threads/init.h"
@@ -541,4 +540,18 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+
+bool
+is_elf_executable(struct file *file)
+{
+  struct Elf32_Ehdr ehdr;
+  return !(file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
+      || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
+      || ehdr.e_type != 2
+      || ehdr.e_machine != 3
+      || ehdr.e_version != 1
+      || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
+      || ehdr.e_phnum > 1024);
 }

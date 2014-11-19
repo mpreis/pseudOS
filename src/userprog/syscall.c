@@ -209,8 +209,14 @@ open (const char *file)
  	lock_acquire (&file_ops_lock);
 
 	struct file *f = filesys_open (file);
+
 	if(f)
 	{
+		if( is_elf_executable (f) )
+			file_deny_write (f);
+		
+		file_seek(f,0);
+
 		struct thread *t = thread_current ();
 		int fds_size = sizeof (t->fds) / sizeof (t->fds[0]);
 		
