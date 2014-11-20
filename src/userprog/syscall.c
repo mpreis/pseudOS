@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <list.h>
+#include <string.h>
 
 #define OFFSET_ARG 4
 
@@ -212,11 +213,6 @@ open (const char *file)
 
 	if(f)
 	{
-		if(strcmp (thread_current ()->name, file) == 0)
-		{
-			file_deny_write (f);
-		}
-
 		struct thread *t = thread_current ();
 		int fds_size = sizeof (t->fds) / sizeof (t->fds[0]);
 		

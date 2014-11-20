@@ -114,8 +114,11 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
-  file_allow_write (cur->executing_file);
-  file_close (cur->executing_file);
+  if(cur->executing_file != NULL)
+  {
+    file_allow_write (cur->executing_file);
+    file_close (cur->executing_file);
+  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -248,6 +251,8 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
       goto done; 
     }
 
+  file_deny_write (t->executing_file);
+
   /* Read and verify executable header. */
   if (file_read (t->executing_file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -335,7 +340,6 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
 
  done:
   /* We arrive here whether the load is successful or not. */
-  file_deny_write (t->executing_file);
 
   return success;
 }
@@ -542,18 +546,4 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
-}
-
-
-bool
-is_elf_executable(struct file *file)
-{
-  struct Elf32_Ehdr ehdr;
-  return !(file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
-      || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
-      || ehdr.e_type != 2
-      || ehdr.e_machine != 3
-      || ehdr.e_version != 1
-      || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
-      || ehdr.e_phnum > 1024);
 }
