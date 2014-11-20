@@ -128,6 +128,7 @@ struct thread
 
     struct list childs;                /* pseudOS: List of children */
     struct child_process* child_info;  /* pseudOS */ 
+    struct file* executing_file;
   };
 
 /* If false (default), use round-robin scheduler.
