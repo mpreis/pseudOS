@@ -14,6 +14,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
@@ -115,9 +116,21 @@ process_exit (void)
   uint32_t *pd;
 
   if(cur->executing_file != NULL)
-  {
-    file_allow_write (cur->executing_file);
     file_close (cur->executing_file);
+
+  /* pseudOS: close all open files */
+  int i;
+  for(i = 0; i < FD_ARR_DEFAULT_LENGTH; i++) {
+    close(i);
+  }
+
+  /* pseudOS: free all the child infos */
+  struct list_elem *e;
+  struct child_process *cp;
+  while (!list_empty(&cur->childs)) {
+    e = list_pop_front(&cur->childs);
+    cp = list_entry (e, struct child_process, childelem);
+    free(cp);
   }
 
   /* Destroy the current process's page directory and switch back
