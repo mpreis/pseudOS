@@ -122,8 +122,6 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters))
   {
-    // pseudOS: sort waiters-list to ensure the correct order
-    list_sort(&sema->waiters, thread_priority_leq, NULL);
     // pseudOS: waiter with highest priority is at the end of the list
     thread_unblock (list_entry (list_pop_back (&sema->waiters),
                                 struct thread, elem));
