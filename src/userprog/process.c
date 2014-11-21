@@ -130,6 +130,7 @@ process_exit (void)
   while (!list_empty(&cur->childs)) {
     e = list_pop_front(&cur->childs);
     cp = list_entry (e, struct child_process, childelem);
+    list_remove(&cp->childelem);
     free(cp);
   }
 
