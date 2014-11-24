@@ -17,7 +17,7 @@
 
 #define OFFSET_ARG 4
 
-struct lock file_ops_lock;
+struct lock syscall_lock;
 
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_usr_ptr(const void * ptr);
@@ -26,7 +26,7 @@ static bool is_valid_fd(int fd);
 void
 syscall_init (void) 
 {
-	lock_init (&file_ops_lock);
+	lock_init (&syscall_lock);
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -138,11 +138,14 @@ exec (const char *cmd_line)
 	if( ! is_valid_usr_ptr (cmd_line) ) 
  		exit(-1);
  	
+ 	lock_acquire (&syscall_lock);
+
  	pid_t pid = process_execute (cmd_line);
  	struct child_process *cp = thread_get_child (pid);
   
   sema_down (&cp->init);
-  
+	
+  lock_release (&syscall_lock);
   if(cp->load_success) 
   	return pid;
   return -1;
@@ -159,6 +162,7 @@ wait (pid_t pid)
 	{
 		cp->parent_is_waiting = true;
 		sema_down (&cp->alive);
+		sema_up (&cp->alive);
 		return cp->exit_status;
 	}
   return -1;
@@ -174,9 +178,9 @@ create (const char *file, unsigned initial_size)
  	if( ! is_valid_usr_ptr (file) ) 
  		exit(-1);
 	
-	lock_acquire (&file_ops_lock);
+	lock_acquire (&syscall_lock);
 	bool b = filesys_create (file, initial_size); 
-	lock_release (&file_ops_lock);
+	lock_release (&syscall_lock);
 	return b;
 }
 
@@ -189,9 +193,9 @@ remove (const char *file)
  	if( ! is_valid_usr_ptr (file) ) 
  		exit(-1);
 
-	lock_acquire (&file_ops_lock);
+	lock_acquire (&syscall_lock);
 	bool b = filesys_remove (file);
-	lock_release (&file_ops_lock);
+	lock_release (&syscall_lock);
   return b;
 }
 
@@ -203,13 +207,10 @@ int
 open (const char *file)
 {
  	if( ! is_valid_usr_ptr (file) ) 
- 	{
  		exit(-1);
-	}
- 	lock_acquire (&file_ops_lock);
-
+	
+ 	lock_acquire (&syscall_lock);
 	struct file *f = filesys_open (file);
-
 	if(f)
 	{
 		struct thread *t = thread_current ();
@@ -221,17 +222,16 @@ open (const char *file)
 
 		if(i == fds_size) 
 		{
-			lock_release (&file_ops_lock);
+			lock_release (&syscall_lock);
 			return -1; // fds array to small
 		}
 		t->fds[i] = f;
 		int fd = i + FD_INIT;
 
-		lock_release (&file_ops_lock);
+		lock_release (&syscall_lock);
 		return fd;
 	}
-
-	lock_release (&file_ops_lock);
+	lock_release (&syscall_lock);
   return -1;
 }
 
@@ -244,7 +244,10 @@ filesize (int fd)
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
 		exit(-1);
 
-  return file_length ( (struct file *) thread_current ()->fds[fd - FD_INIT] );
+	lock_acquire (&syscall_lock);
+	int size = file_length ( (struct file *) thread_current ()->fds[fd - FD_INIT] );
+  lock_release (&syscall_lock);
+  return size;
 }
 
 /*
@@ -258,8 +261,7 @@ read (int fd, void *buffer, unsigned size)
 	if( !is_valid_usr_ptr (buffer) || !is_valid_fd(fd) ) 
  		exit(-1);
 
- 	lock_acquire (&file_ops_lock);
-
+ 	lock_acquire (&syscall_lock);
 	if(fd == STDIN_FILENO)
 	{
 		uint8_t *buf = buffer;
@@ -267,7 +269,7 @@ read (int fd, void *buffer, unsigned size)
 		for(i = 0; i < size; i++)
 			buf[i] = input_getc();
 
-		lock_release (&file_ops_lock);
+		lock_release (&syscall_lock);
 		return size;
 	} 
 	else if ( fd >= FD_INIT && thread_current ()->fds[fd - FD_INIT] != NULL )
@@ -276,10 +278,10 @@ read (int fd, void *buffer, unsigned size)
 			(struct file *) thread_current ()->fds[fd - FD_INIT],
 			buffer,
 			size );
-		lock_release (&file_ops_lock);
+		lock_release (&syscall_lock);
 		return r;
 	}
-	lock_release (&file_ops_lock);
+	lock_release (&syscall_lock);
 	return -1;
 }
 
@@ -294,12 +296,11 @@ write (int fd, const void *buffer, unsigned size)
 	if( !is_valid_usr_ptr (buffer) || !is_valid_fd(fd) ) 
  		exit(-1);
 
- 	lock_acquire (&file_ops_lock);
-
+ 	lock_acquire (&syscall_lock);
   if(fd == STDOUT_FILENO)
   {
   	putbuf(buffer, size);
-  	lock_release(&file_ops_lock);
+  	lock_release(&syscall_lock);
   	return size;
   }
   else if (fd >= FD_INIT && thread_current ()->fds[fd - FD_INIT] != NULL )
@@ -308,10 +309,10 @@ write (int fd, const void *buffer, unsigned size)
 			(struct file *) thread_current ()->fds[fd - FD_INIT],
 			buffer,
 			size );
-  	lock_release (&file_ops_lock);
+  	lock_release (&syscall_lock);
   	return r;
   }
-  lock_release (&file_ops_lock);
+  lock_release (&syscall_lock);
   return -1;
 }
 
@@ -325,11 +326,11 @@ seek (int fd, unsigned position)
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
 		exit(-1);
 
-	lock_acquire (&file_ops_lock);
+	lock_acquire (&syscall_lock);
 	file_seek (
 		(struct file *) thread_current ()->fds[fd - FD_INIT], 
 		position );
-	lock_release (&file_ops_lock);
+	lock_release (&syscall_lock);
 }
 
 /* pseudOS: Returns the position of the next byte to be read or written in open file fd, 
@@ -340,7 +341,11 @@ tell (int fd)
 {
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
 		exit(-1);
-	return file_tell( (struct file *) thread_current ()->fds[fd - FD_INIT] ); 
+
+	lock_acquire (&syscall_lock);
+	unsigned pos = file_tell( (struct file *) thread_current ()->fds[fd - FD_INIT] ); 
+	lock_release (&syscall_lock);
+  return pos;
 }
 
 /*
@@ -353,10 +358,10 @@ close (int fd)
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL)
 		return;
 
-	lock_acquire (&file_ops_lock);
+	lock_acquire (&syscall_lock);
 	file_close ( thread_current ()->fds[fd - FD_INIT] );
 	thread_current ()->fds[fd - FD_INIT] = NULL;
-	lock_release (&file_ops_lock);
+	lock_release (&syscall_lock);
 }
 
 /* pseudOS: As part of a system call, the kernel must often access 

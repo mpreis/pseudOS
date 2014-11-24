@@ -12,7 +12,7 @@ struct child_process
     pid_t pid;
     int exit_status;
     struct thread *parent;
-    struct semaphore alive;            /* pseudOS: This semaphore shows that this thread is alive. */
+    struct semaphore alive;
     struct semaphore init;
     bool load_success;
     bool parent_is_waiting;

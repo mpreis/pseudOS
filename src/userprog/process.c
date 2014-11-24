@@ -52,9 +52,8 @@ process_execute (const char *file_name)
   if (tid == TID_ERROR)
   {
     palloc_free_page (fn_copy); 
-    sema_up (&thread_current ()->child_info->init);
-    thread_current ()->child_info->load_success = false;  
   }
+  
   return tid;
 }
 
@@ -78,11 +77,12 @@ start_process (void *file_name_)
   /* If load failed, quit. */
   palloc_free_page (file_name);
   thread_current ()->child_info->load_success = success;  
-  sema_up (&thread_current ()->child_info->init);
 
   if (!success) 
     thread_exit ();
 
+  sema_up (&thread_current ()->child_info->init);
+  
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
