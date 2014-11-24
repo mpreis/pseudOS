@@ -204,7 +204,6 @@ open (const char *file)
 {
  	if( ! is_valid_usr_ptr (file) ) 
  	{
- 		printf(" --- invalid ptr \n");
  		exit(-1);
 	}
  	lock_acquire (&file_ops_lock);
@@ -222,7 +221,6 @@ open (const char *file)
 
 		if(i == fds_size) 
 		{
-			printf(" --- no space \n");
 			lock_release (&file_ops_lock);
 			return -1; // fds array to small
 		}
@@ -234,7 +232,6 @@ open (const char *file)
 	}
 
 	lock_release (&file_ops_lock);
-	printf(" --- komisch \n");
   return -1;
 }
 
