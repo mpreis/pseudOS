@@ -253,10 +253,11 @@ thread_create (const char *name, int priority,
   t->child_info = cp;
 
   t->child_info->parent_is_waiting = false;
-  t->child_info->load_status = LOAD_STATUS_INIT;
   sema_init (&t->child_info->alive, 1);
   sema_down (&t->child_info->alive); /* pseudOS */
   
+  sema_init (&t->child_info->init, 1);
+  sema_down (&t->child_info->init); /* pseudOS */
   list_push_back (&thread_current ()->childs, &t->child_info->childelem);
 
   intr_set_level (old_level);
@@ -351,21 +352,19 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
-
-  sema_up (&thread_current ()->child_info->alive);        /* pseudOS */
+  struct thread *t = thread_current ();
+  sema_up (&t->child_info->alive);        /* pseudOS */
+  sema_up (&t->child_info->init);        /* pseudOS */
 
 #ifdef USERPROG
   process_exit ();
 #endif
-
-  free(*thread_current ()->fds);
-
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current ()->allelem);
-  thread_current ()->status = THREAD_DYING;
+  list_remove (&t->allelem);
+  t->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
 }

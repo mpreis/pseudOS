@@ -124,7 +124,7 @@ struct thread
     int recent_cpu; 			       /* pseudOS: How much time recieved this thread recently. */
 
     /* pseudOS: Project 2 */
-    int *fds[FD_ARR_DEFAULT_LENGTH];   /* pseudOS: This array holds pointers of all open files. */
+    struct file* fds[FD_ARR_DEFAULT_LENGTH];   /* pseudOS: This array holds pointers of all open files. */
 
     struct list childs;                /* pseudOS: List of children */
     struct child_process* child_info;  /* pseudOS */ 

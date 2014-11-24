@@ -48,10 +48,12 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (fn, PRI_DEFAULT, start_process, fn_copy);
   
+  palloc_free_page (fn); 
   if (tid == TID_ERROR)
   {
-    palloc_free_page (fn); 
     palloc_free_page (fn_copy); 
+    sema_up (&thread_current ()->child_info->init);
+    thread_current ()->child_info->load_success = false;  
   }
   return tid;
 }
@@ -75,12 +77,11 @@ start_process (void *file_name_)
 
   /* If load failed, quit. */
   palloc_free_page (file_name);
+  thread_current ()->child_info->load_success = success;  
+  sema_up (&thread_current ()->child_info->init);
+
   if (!success) 
-  {
-    thread_current ()->child_info->load_status = LOAD_STATUS_FAIL;
     thread_exit ();
-  }
-  thread_current ()->child_info->load_status = LOAD_STATUS_SUCCESS;  
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -116,22 +117,12 @@ process_exit (void)
   uint32_t *pd;
 
   if(cur->executing_file != NULL)
-    file_close (cur->executing_file);
-
+    file_close (cur->executing_file);  
+  
   /* pseudOS: close all open files */
   int i;
-  for(i = 0; i < FD_ARR_DEFAULT_LENGTH; i++) {
+  for(i = 0; i < FD_ARR_DEFAULT_LENGTH; i++)
     close(i);
-  }
-
-  /* pseudOS: free all the child infos */
-  struct list_elem *e;
-  struct child_process *cp;
-  while (!list_empty(&cur->childs)) {
-    e = list_pop_front(&cur->childs);
-    cp = list_entry (e, struct child_process, childelem);
-    free(cp);
-  }
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -264,8 +255,6 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
       goto done; 
     }
 
-  file_deny_write (t->executing_file);
-
   /* Read and verify executable header. */
   if (file_read (t->executing_file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
@@ -278,6 +267,8 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
       printf ("load: %s: error loading executable\n", file_name);
       goto done; 
     }
+
+  file_deny_write (t->executing_file);
 
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
@@ -353,6 +344,11 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
 
  done:
   /* We arrive here whether the load is successful or not. */
+  if(!success)
+  {
+    file_close(t->executing_file);
+    t->executing_file = NULL;
+  }
 
   return success;
 }

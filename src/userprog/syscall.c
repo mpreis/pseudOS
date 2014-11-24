@@ -141,13 +141,11 @@ exec (const char *cmd_line)
  	pid_t pid = process_execute (cmd_line);
  	struct child_process *cp = thread_get_child (pid);
   
-  while(cp->load_status == LOAD_STATUS_INIT)
-  	barrier ();
+  sema_down (&cp->init);
   
-  if(cp->load_status == LOAD_STATUS_FAIL) 
-  	return -1;
-	
-  return pid;
+  if(cp->load_success) 
+  	return pid;
+  return -1;
 }
 
 /*
@@ -205,8 +203,10 @@ int
 open (const char *file)
 {
  	if( ! is_valid_usr_ptr (file) ) 
+ 	{
+ 		printf(" --- invalid ptr \n");
  		exit(-1);
-
+	}
  	lock_acquire (&file_ops_lock);
 
 	struct file *f = filesys_open (file);
@@ -215,17 +215,18 @@ open (const char *file)
 	{
 		struct thread *t = thread_current ();
 		int fds_size = sizeof (t->fds) / sizeof (t->fds[0]);
-		
+
 		int i;
 		for(i = 0; i < fds_size; i++)
 			if(t->fds[i] == NULL)	break;
 
 		if(i == fds_size) 
 		{
+			printf(" --- no space \n");
 			lock_release (&file_ops_lock);
 			return -1; // fds array to small
 		}
-		t->fds[i] = (int *) f;
+		t->fds[i] = f;
 		int fd = i + FD_INIT;
 
 		lock_release (&file_ops_lock);
@@ -233,6 +234,7 @@ open (const char *file)
 	}
 
 	lock_release (&file_ops_lock);
+	printf(" --- komisch \n");
   return -1;
 }
 
@@ -355,7 +357,7 @@ close (int fd)
 		return;
 
 	lock_acquire (&file_ops_lock);
-	file_close ( (struct file *) thread_current ()->fds[fd - FD_INIT] );
+	file_close ( thread_current ()->fds[fd - FD_INIT] );
 	thread_current ()->fds[fd - FD_INIT] = NULL;
 	lock_release (&file_ops_lock);
 }

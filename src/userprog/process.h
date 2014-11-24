@@ -5,10 +5,6 @@
 #include "userprog/syscall.h"
 #include "filesys/file.h"
 
-#define LOAD_STATUS_SUCCESS 1
-#define LOAD_STATUS_FAIL 0
-#define LOAD_STATUS_INIT -1  
-
 /* pseudOS */
 struct child_process
   {
@@ -17,7 +13,8 @@ struct child_process
     int exit_status;
     struct thread *parent;
     struct semaphore alive;            /* pseudOS: This semaphore shows that this thread is alive. */
-    int load_status;
+    struct semaphore init;
+    bool load_success;
     bool parent_is_waiting;
   };
 
