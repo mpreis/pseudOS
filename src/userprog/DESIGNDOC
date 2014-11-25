@@ -29,19 +29,65 @@ Mario Preishuber <mario.preishuber@stud.sbg.ac.at>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+No new structs or variables are used for the implementation of argument 
+passing.
+
+
 ---- ALGORITHMS ----
 
 >> A2: Briefly describe how you implemented argument parsing.  How do
 >> you arrange for the elements of argv[] to be in the right order?
 >> How do you avoid overflowing the stack page?
 
+Argument passing is basically implemented as described in Pintos 
+documentation. The filename and arguments are splitted with the given 
+strtok_r() function. Different to the documentation, we push the filename 
+and the arguments in the given order on the stack. So, the stack for the 
+following command "/bin/ls -l foo bar" looks like this:
+
+Address		Name			Data		Type
+0xbffffffc	argv[0][...]	/bin/ls\0	char[8]
+0xbffffff8	argv[1][...]	-l\0		char[3]
+0xbffffff5	argv[2][...]	foo\0		char[4]
+0xbfffffed	argv[3][...]	bar\0		char[4]
+0xbfffffec	word-align		0			uint8_t
+0xbfffffe8	argv[4]			0			char *
+0xbfffffe4	argv[3]			0xbfffffed	char *
+0xbfffffe0	argv[2]			0xbffffff5	char *
+0xbfffffdc	argv[1]			0xbffffff8	char *
+0xbfffffd8	argv[0]			0xbffffffc	char *
+0xbfffffd4	argv			0xbfffffd8	char **
+0xbfffffd0	argc			4			int
+0xbfffffcc	return address	0			void (*) ()
+
+The order of values doesn't matter, as long as the pointers on the values 
+are in the correct order. We decided to use this way, because we can simply 
+iterate over the command string and store the values in the argv array.
+Later, when pushing the pointers, we iterate over the array in reversed order.
+
+//TODO: How do you avoid overflowing the stack page?
+
+
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
 
+For the usage of strtok_r() the context pointer is held by the caller of the 
+function. This is important for our pintos system, because multiple threads 
+will use it "at the same time" with different context pointers, which wouldn't 
+be possible with strtok().
+
+
 >> A4: In Pintos, the kernel separates commands into a executable name
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
+
+A possible advantage of the UNIX approach is for security reasons. Instead of 
+passing everything (maybe malicious code) directly to the operating system, 
+the input can be parsed and checked before in the shell. 
+
+It could also lead to a better performance, because wrong or missing arguments 
+or filenames can be checked wihtin the shell.
 
 			     SYSTEM CALLS
 			     ============
