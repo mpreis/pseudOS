@@ -1,9 +1,9 @@
-			+--------------------+
-			|        CS 140      |
-			| PROJECT 1: THREADS |
-			|   DESIGN DOCUMENT  |
-			+--------------------+
-				   
+      +--------------------+
+      |        CS 140      |
+      | PROJECT 1: THREADS |
+      |   DESIGN DOCUMENT  |
+      +--------------------+
+           
 ---- GROUP ----
 
 >> Fill in the names and email addresses of your group members.
@@ -20,8 +20,8 @@ Mario Preishuber <mario.preishuber@stud.sbg.ac.at>
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
 
-			     ALARM CLOCK
-			     ===========
+           ALARM CLOCK
+           ===========
 
 ---- DATA STRUCTURES ----
 
@@ -74,8 +74,8 @@ Answer like in A4.
 While choosing a uint64_t for the ticks is pretty obvious, we consider that a list is the perfect datastructe for collecting all blocked threads. Lists are already used for all threads and all ready threads, furthermore they are well implemented by Pintos itself.
 
 
-			 PRIORITY SCHEDULING
-			 ===================
+       PRIORITY SCHEDULING
+       ===================
 
 ---- DATA STRUCTURES ----
 
@@ -195,8 +195,8 @@ reasen therefor was, that it is much easier to implement priority donation
 if each thread knows the lock it is waiting for.
 
 
-			  ADVANCED SCHEDULER
-			  ==================
+        ADVANCED SCHEDULER
+        ==================
 
 ---- DATA STRUCTURES ----
 
@@ -295,8 +295,8 @@ and clear. Because all functions are very short in terms of operations
 directly with the code in the function. This leads to a performance
 optimization.
 
-			   SURVEY QUESTIONS
-			   ================
+         SURVEY QUESTIONS
+         ================
 
 Answering these questions is optional, but it will help us improve the
 course in future quarters.  Feel free to tell us anything you
