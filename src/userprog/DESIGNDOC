@@ -65,8 +65,6 @@ are in the correct order. We decided to use this way, because we can simply
 iterate over the command string and store the values in the argv array.
 Later, when pushing the pointers, we iterate over the array in reversed order.
 
-//TODO: How do you avoid overflowing the stack page?
-
 
 ---- RATIONALE ----
 
@@ -88,6 +86,7 @@ the input can be parsed and checked before in the shell.
 
 It could also lead to a better performance, because wrong or missing arguments 
 or filenames can be checked wihtin the shell.
+
 
 			     SYSTEM CALLS
 			     ============
@@ -123,6 +122,7 @@ Extensions of userprog/process.h:
 	    bool parent_is_waiting;     // Indicates if the parent is already waiting for this child.
 	  };
 
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
@@ -135,6 +135,7 @@ FD_INIT which has the value 2.
 
 To answer the question of above: File descriptor are unique within a
 thread.
+
 
 ---- ALGORITHMS ----
 
@@ -168,6 +169,11 @@ We use a lock to ensure that we avoid race conditions.
 >> for a system call that only copies 2 bytes of data?  Is there room
 >> for improvement in these numbers, and how much?
 
+We check for each case if the start- and end address are valid user 
+addresses in addition we check for both if the addresses are mapped 
+to a physical page in the pagedir. 
+
+
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
 
@@ -189,6 +195,7 @@ access the exit status of its child. Has the child already been
 terminated the parent is able to execute sema_down without waiting
 and returns the exit status of the child. 
 
+
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
 >> process to be terminated.  System calls are fraught with such
@@ -202,6 +209,15 @@ and returns the exit status of the child.
 >> allocated resources (locks, buffers, etc.) are freed?  In a few
 >> paragraphs, describe the strategy or strategies you adopted for
 >> managing these issues.  Give an example.
+
+In our design approach we first check if the esp is in the user stack. 
+Individual for each system call, we check the all arguments before 
+calling the system call function. These checks are done by calling 
+is_valid_usr_ptr(). 
+
+In the end all errors or terminating processes calls thread_exit(), 
+where all the resources are freed. 
+
 
 ---- SYNCHRONIZATION ----
 
@@ -230,10 +246,38 @@ of success or false in case of failure.
 >> terminates without waiting, before C exits?  After C exits?  Are
 >> there any special cases?
 
+How do you ensure proper synchronization and avoid race conditions when 
+P calls wait(C) before C exits?
+	We only wait for a child, if it exists. In the other case we return 
+	-1. If a child exists, it is part of the parents child list. 
+
+How do you ensure proper synchronization and avoid race conditions when 
+P calls wait(C) after C exits?
+	As described in B5, we use a child-local semaphore alive, which 
+	ensures proper synchronization.
+
+How do you ensure that all resources are freed in each case?
+	In any case thread_exit() is called, where all necessary frees are done. 
+
+How about when P terminates without waiting, before C exits?
+	Due to the semaphore, it isn't possible for P to terminate before C exists.
+
+How about when P terminates without waiting, after C exits? 
+Are there any special cases?
+	The parent process P just has a list of child infos and no reference to 
+	the child process itself. So they are independent from each other. In 
+	every case all resources can be freed in thread_exit().
+
+
 ---- RATIONALE ----
 
 >> B9: Why did you choose to implement access to user memory from the
 >> kernel in the way that you did?
+
+We decided to use the first of two given ways to implement the memory access. 
+This means we first verify the validity of the pointer and then dereference it. 
+In our opportunity this is the better way in case of security. 
+
 
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
@@ -257,10 +301,12 @@ Improvements:
 		FD_ARR_DEFAULT_LENGTH is to small is, e.g., to reallocate the array
 		and double the size.
 
+
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
 
 We did not change this mapping.
+
 
 			   SURVEY QUESTIONS
 			   ================
