@@ -133,7 +133,7 @@ file pointer in the fds array. We know that the file descriptors 0 and 1
 are reserved for the stdin and stdout. This is the reason why we add 
 FD_INIT which has the value 2. 
 
-To answer the question of above: File descriptor are unique within a
+To answer the question above: File descriptors are unique within a
 thread.
 
 
@@ -148,16 +148,16 @@ memory or a pointer to kernel memory space we have to check all of
 these possibilities. This is done in the function is_valid_usr_ptr().
 
 As you can read in B2, in our project all file descriptors of a 
-specific thread are hold in an thread-local array with size 128. 
-0, 1 are resevered for STDIN_FILENO and STDOUT_FILENO. These two 
-cases are handled seperatly for reading from the keyboard with 
+specific thread are hold in an thread-local array with size 
+FD_ARR_DEFAULT_LENGTH. 0, 1 are resevered for STDIN_FILENO and STDOUT_FILENO. 
+These two cases are handled seperatly for reading from the keyboard with 
 input_getc() and writing to the concole with putbuf(). 
 
-In any other case we check if the file descriptor is between 2 and 128, 
-which means a valid file descriptor in our operating system. Furthermore 
-we have to check if the file descriptor is not NULL. 
-If all checks passed, we read and write with the given file_read() and 
-file_write() functions. 
+In any other case we check if the file descriptor is between FD_INIT and 
+FD_ARR_DEFAULT_LENGTH+1, which means a valid file descriptor in our 
+operating system. Furthermore we have to check if the file descriptor is 
+not NULL. If all checks passed, we read and write with the given file_read() 
+and file_write() functions. 
 
 We use a lock to ensure that we avoid race conditions.  
 
@@ -177,21 +177,21 @@ to a physical page in the pagedir.
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
 
-Each thread has a list of childs, which list element is of type
+Each thread has a list of childs, which list elements are of type
 struct child_process. The first step is to lookup the given pid in
 the list of childs. If the return value is NULL, there is no such
 child and we return -1. The struct child_process holds a variable
 parent_is_waiting which is TRUE if the parent called already wait
-with this pid, is this the case we also return -1.
+with this pid, in this case we also return -1.
 
 If there is a valid child and wait is called the first time for this 
 pid we set parent_is_waiting to TRUE. Next we call sema_down on 
-the alive variable of the child. If an new thread is created alive is
+the alive variable of the child. If a new thread is created alive is
 locked by the thread itself. Only if thread_exit is called this 
 semaphore is released. In this case also the exit status is set.
-A parent is on the waiters list of the alive semaphore till a child
+A parent is on the waiters list of the alive semaphore until a child
 calls thread_exit. After that the parent wakes up and is able to 
-access the exit status of its child. Has the child already been 
+access the exit status of its child. If the child already has been 
 terminated the parent is able to execute sema_down without waiting
 and returns the exit status of the child. 
 
@@ -297,8 +297,8 @@ Advantages:
 
 Improvements:
 	* To reduce the memory overhead FD_ARR_DEFAULT_LENGTH should be small.
-	* One solution for don't running out of file descriptors, because 
-		FD_ARR_DEFAULT_LENGTH is to small is, e.g., to reallocate the array
+	* One solution for not running out of file descriptors, because 
+		FD_ARR_DEFAULT_LENGTH is to small, is to reallocate the array
 		and double the size.
 
 
