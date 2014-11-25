@@ -15,13 +15,12 @@
 #include <list.h>
 #include <string.h>
 
-#define OFFSET_ARG 4
-
-struct lock syscall_lock;
+#define OFFSET_ARG 4			 /* pseudOS: Offest of arguments on the stack. */
+static struct lock syscall_lock; /* pseudOS: Lock variable to ensure a secure execution of a system-call. */
 
 static void syscall_handler (struct intr_frame *);
-static bool is_valid_usr_ptr(const void * ptr);
-static bool is_valid_fd(int fd);
+static bool is_valid_usr_ptr(const void * ptr);	/* pseudOS: Checks if the given pointer is a valid user-space pointer. */
+static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descriptor is valid. */
 
 void
 syscall_init (void) 
@@ -157,12 +156,11 @@ exec (const char *cmd_line)
 int 
 wait (pid_t pid)
 {
-	struct child_process *cp = thread_get_child (pid);
+ 	struct child_process *cp = thread_get_child (pid);
 	if(cp != NULL && !cp->parent_is_waiting)
 	{
 		cp->parent_is_waiting = true;
 		sema_down (&cp->alive);
-		sema_up (&cp->alive);
 		return cp->exit_status;
 	}
   return -1;
@@ -245,7 +243,7 @@ filesize (int fd)
 		exit(-1);
 
 	lock_acquire (&syscall_lock);
-	int size = file_length ( (struct file *) thread_current ()->fds[fd - FD_INIT] );
+	int size = file_length ( thread_current ()->fds[fd - FD_INIT] );
   lock_release (&syscall_lock);
   return size;
 }
@@ -275,9 +273,8 @@ read (int fd, void *buffer, unsigned size)
 	else if ( fd >= FD_INIT && thread_current ()->fds[fd - FD_INIT] != NULL )
 	{
 		int r = file_read (
-			(struct file *) thread_current ()->fds[fd - FD_INIT],
-			buffer,
-			size );
+			thread_current ()->fds[fd - FD_INIT],
+			buffer, size );
 		lock_release (&syscall_lock);
 		return r;
 	}
@@ -297,23 +294,23 @@ write (int fd, const void *buffer, unsigned size)
  		exit(-1);
 
  	lock_acquire (&syscall_lock);
-  if(fd == STDOUT_FILENO)
-  {
-  	putbuf(buffer, size);
-  	lock_release(&syscall_lock);
-  	return size;
-  }
-  else if (fd >= FD_INIT && thread_current ()->fds[fd - FD_INIT] != NULL )
-  {
-  	int r = file_write (
-			(struct file *) thread_current ()->fds[fd - FD_INIT],
+	if(fd == STDOUT_FILENO)
+	{
+		putbuf(buffer, size);
+		lock_release(&syscall_lock);
+		return size;
+	}
+	else if (fd >= FD_INIT && thread_current ()->fds[fd - FD_INIT] != NULL )
+	{
+		int r = file_write (
+			thread_current ()->fds[fd - FD_INIT],
 			buffer,
 			size );
-  	lock_release (&syscall_lock);
-  	return r;
-  }
-  lock_release (&syscall_lock);
-  return -1;
+		lock_release (&syscall_lock);
+		return r;
+	}
+	lock_release (&syscall_lock);
+	return -1;
 }
 
 /*
@@ -328,7 +325,7 @@ seek (int fd, unsigned position)
 
 	lock_acquire (&syscall_lock);
 	file_seek (
-		(struct file *) thread_current ()->fds[fd - FD_INIT], 
+		thread_current ()->fds[fd - FD_INIT], 
 		position );
 	lock_release (&syscall_lock);
 }
@@ -364,7 +361,11 @@ close (int fd)
 	lock_release (&syscall_lock);
 }
 
-/* pseudOS: As part of a system call, the kernel must often access 
+/* 
+ * pseudOS: Checks if the given pointer is a valid user-space pointer.
+ * 
+ * Snippet of the Pintos docu: 
+ * As part of a system call, the kernel must often access 
  * memory through pointers provided by a user program. The kernel 
  * must be very careful about doing so, because the user can pass 
  * a null pointer, a pointer to unmapped virtual memory, or a pointer 
@@ -376,17 +377,13 @@ close (int fd)
 static bool
 is_valid_usr_ptr(const void * ptr)
 {
-	if( (ptr != NULL)
-				&& is_user_vaddr(ptr)
-				&& pagedir_get_page(thread_current()->pagedir, ptr) != 0) 
-	{
-		return true;
-	}
-	return false;	
+	return ((ptr != NULL)
+		&& is_user_vaddr(ptr)
+		&& pagedir_get_page(thread_current()->pagedir, ptr) != 0);	
 }
 
 /*
- * pseudOS: Checks if the give fd has a valid value.
+ * pseudOS: Checks if the given file-descriptor is valid. 
  */
 static bool
 is_valid_fd(int fd)

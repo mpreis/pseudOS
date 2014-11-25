@@ -32,10 +32,9 @@ typedef int tid_t;
 #define NICE_DEFAULT 0			/* Default niceness. */
 #define NICE_MAX 20			/* Highest niceness. */
 
-/* pseudOS */
-#define FD_INIT 2            
-#define FD_ARR_DEFAULT_LENGTH  128
-#define DEFAULT_EXIT_STATUS -1
+/* pseudOS: Project 2 */
+#define FD_INIT 2                    /* pseudOS: The smallest possible value of a file-descriptor. */
+#define FD_ARR_DEFAULT_LENGTH 128    /* pseudOS: Default size of the file-descriptors array. */
 
 /* A kernel thread or user process.
 
@@ -124,11 +123,10 @@ struct thread
     int recent_cpu; 			       /* pseudOS: How much time recieved this thread recently. */
 
     /* pseudOS: Project 2 */
-    struct file* fds[FD_ARR_DEFAULT_LENGTH];   /* pseudOS: This array holds pointers of all open files. */
-
-    struct list childs;                /* pseudOS: List of children */
-    struct child_process* child_info;  /* pseudOS */ 
-    struct file* executing_file;
+    struct file* fds[FD_ARR_DEFAULT_LENGTH];/* pseudOS: This array holds pointers of all open files. */
+    struct list childs;                     /* pseudOS: List of children of this thread. */
+    struct child_process* child_info;       /* pseudOS: Holds information of this thread. */ 
+    struct file* executable;                /* pseudOS: Represents the executable which is executed by this thread.*/
   };
 
 /* If false (default), use round-robin scheduler.

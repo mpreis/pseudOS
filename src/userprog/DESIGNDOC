@@ -1,5 +1,5 @@
 		     +--------------------------+
-       	       	     |		CS 140		|
+       	     |			CS 140			|
 		     | PROJECT 2: USER PROGRAMS	|
 		     | 	   DESIGN DOCUMENT     	|
 		     +--------------------------+
@@ -52,9 +52,43 @@ Mario Preishuber <mario.preishuber@stud.sbg.ac.at>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Extensions of thread/threads.h:
+	#define FD_INIT 2                    // The smallest possible value of a file-descriptor.
+	#define FD_ARR_DEFAULT_LENGTH 128    // Default size of the file descriptors array.
+
+Extensions of struct thread (threads/thread.h):
+	struct file* fds[FD_ARR_DEFAULT_LENGTH];// This array holds pointers of all open files.
+	struct list childs;						// List of children of this thread.
+    struct child_process* child_info;		// Holds information of this thread.
+    struct file* executable;				// Represents the executable which is executed by this thread.
+
+Extensions of userprog/process.h:
+	#define DEFAULT_EXIT_STATUS -1 	// The default exit status.
+
+	struct child_process
+	  {
+	    struct list_elem childelem; // List element.
+	    pid_t pid;                  // ID of the process.
+	    int exit_status;            // Status which is passed to the system-call exit.
+	    struct thread *parent;      // Reference to the process parent.
+	    struct semaphore alive;     // This semaphore is down till the thread dies.
+	    struct semaphore init;      // This semaphore goes up if the initialization is done.
+	    bool load_success;          // Indicates if loading the executable was sucessful.
+	    bool parent_is_waiting;     // Indicates if the parent is already waiting for this child.
+	  };
+
 >> B2: Describe how file descriptors are associated with open files.
 >> Are file descriptors unique within the entire OS or just within a
 >> single process?
+
+Each thread holds an array, called fds, of struct file pointers. The 
+file descriptor is computed by adding FD_INIT to the position of the 
+file pointer in the fds array. We know that the file descriptors 0 and 1 
+are reserved for the stdin and stdout. This is the reason why we add 
+FD_INIT which has the value 2. 
+
+To answer the question of above: File descriptor are unique within a
+thread.
 
 ---- ALGORITHMS ----
 
@@ -70,6 +104,24 @@ Mario Preishuber <mario.preishuber@stud.sbg.ac.at>
 
 >> B5: Briefly describe your implementation of the "wait" system call
 >> and how it interacts with process termination.
+
+Each thread has a list of childs, which list element is of type
+struct child_process. The first step is to lookup the given pid in
+the list of childs. If the return value is NULL, there is no such
+child and we return -1. The struct child_process holds a variable
+parent_is_waiting which is TRUE if the parent called already wait
+with this pid, is this the case we also return -1.
+
+If there is a valid child and wait is called the first time for this 
+pid we set parent_is_waiting to TRUE. Next we call sema_down on 
+the alive variable of the child. If an new thread is created alive is
+locked by the thread itself. Only if thread_exit is called this 
+semaphore is released. In this case also the exit status is set.
+A parent is on the waiters list of the alive semaphore till a child
+calls thread_exit. After that the parent wakes up and is able to 
+access the exit status of its child. Has the child already been 
+terminated the parent is able to execute sema_down without waiting
+and returns the exit status of the child. 
 
 >> B6: Any access to user program memory at a user-specified address
 >> can fail due to a bad pointer value.  Such accesses must cause the
@@ -107,8 +159,29 @@ Mario Preishuber <mario.preishuber@stud.sbg.ac.at>
 >> B10: What advantages or disadvantages can you see to your design
 >> for file descriptors?
 
+Disadvantages:
+	* The maximum number of open files per thread is limited by FD_ARR_DEFAULT_LENGTH.
+		Our implementation of open return -1 if this limit is reached.
+	* Each thread holds an array of size FD_ARR_DEFAULT_LENGTH. This leads to a
+		memory overhead if less than FD_ARR_DEFAULT_LENGTH files are opened.
+
+Advantages:
+	* Constant access time if we access a file, by calling:
+		filesize, read, write, seek, tell, and close.
+	* Linear access time if we access a file, by calling:
+		open (because we have to lookup the next available fd)
+	* There is no counter needed for the number of current open files. 
+
+Improvements:
+	* To reduce the memory overhead FD_ARR_DEFAULT_LENGTH should be small.
+	* One solution for don't running out of file descriptors, because 
+		FD_ARR_DEFAULT_LENGTH is to small is, e.g., to reallocate the array
+		and double the size.
+
 >> B11: The default tid_t to pid_t mapping is the identity mapping.
 >> If you changed it, what advantages are there to your approach?
+
+We did not change this mapping.
 
 			   SURVEY QUESTIONS
 			   ================
