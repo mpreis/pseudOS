@@ -19,7 +19,7 @@
 static struct lock syscall_lock; /* pseudOS: Lock variable to ensure a secure execution of a system-call. */
 
 static void syscall_handler (struct intr_frame *);
-static bool is_valid_usr_ptr(const void * ptr);	/* pseudOS: Checks if the given pointer is a valid user-space pointer. */
+static bool is_valid_usr_ptr(const void * ptr, unsigned size);	/* pseudOS: Checks if the given pointer is a valid user-space pointer. */
 static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descriptor is valid. */
 
 void
@@ -32,7 +32,7 @@ syscall_init (void)
 void
 syscall_handler (struct intr_frame *f) 
 {
-	if(!is_valid_usr_ptr(f->esp)) 
+	if(!is_valid_usr_ptr(f->esp, 0)) 
 		exit(-1);
 
 	switch(*(uint32_t *) (f->esp))
@@ -44,61 +44,101 @@ syscall_handler (struct intr_frame *f)
 		case SYS_EXIT: 
 			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
 				exit ( *(int *)(f->esp + OFFSET_ARG) );
-			else exit(-1);
+			else 
+				exit (-1);
 			break;
 
-		case SYS_EXEC: 
-			f->eax = exec ( *(char **)(f->esp + OFFSET_ARG) );
+		case SYS_EXEC:
+			if( is_user_vaddr((char **)(f->esp + OFFSET_ARG)) )
+				f->eax = exec ( *(char **)(f->esp + OFFSET_ARG) );
+			else 
+				exit (-1);
 			break; 
 
 		case SYS_WAIT: 
-			f->eax = wait ( *(pid_t *)(f->esp + OFFSET_ARG) );
+			if( is_user_vaddr((pid_t *)(f->esp + OFFSET_ARG)) )
+				f->eax = wait ( *(pid_t *)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
 			break;
 
 		case SYS_CREATE: 
-			f->eax = create ( 
-				*(char **)(f->esp + OFFSET_ARG), 
-				*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
+			if( is_user_vaddr((char **)(f->esp + OFFSET_ARG)) 
+					&& is_user_vaddr((unsigned int *)(f->esp + OFFSET_ARG * 2)) )
+				f->eax = create ( 
+					*(char **)(f->esp + OFFSET_ARG), 
+					*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
+			else
+				exit (-1);
 			break;
 
 		case SYS_REMOVE: 
-			f->eax = remove ( *(char **)(f->esp + OFFSET_ARG) );
+			if( is_user_vaddr((char **)(f->esp + OFFSET_ARG)) )
+				f->eax = remove ( *(char **)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
 			break;
 
 		case SYS_OPEN: 
-			f->eax = open ( *(char **)(f->esp + OFFSET_ARG) );
+			if( is_user_vaddr((char **)(f->esp + OFFSET_ARG)) )
+				f->eax = open ( *(char **)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
 			break;
 
 		case SYS_FILESIZE: 
-			f->eax = filesize ( *(int *)(f->esp + OFFSET_ARG) );
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
+				f->eax = filesize ( *(int *)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
 			break;
 
 		case SYS_READ:
-			f->eax = read (
-				*(int *)(f->esp + (OFFSET_ARG * 1)), 
-				*(char **)(f->esp + (OFFSET_ARG * 2)), 
-				*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );	
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG))
+					&& is_user_vaddr((char *)(f->esp + OFFSET_ARG * 2))
+					&& is_user_vaddr((unsigned int *)(f->esp + OFFSET_ARG * 3)) )
+				f->eax = read (
+					*(int *)(f->esp + OFFSET_ARG), 
+					*(char **)(f->esp + (OFFSET_ARG * 2)), 
+					*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );
+			else
+				exit (-1);	
 			break;
 		
 		case SYS_WRITE:
-			f->eax = write ( 
-				*(int *)(f->esp + (OFFSET_ARG * 1)), 
-				*(char **)(f->esp + (OFFSET_ARG * 2)), 
-				*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG))
+					&& is_user_vaddr((char *)(f->esp + OFFSET_ARG * 2))
+					&& is_user_vaddr((unsigned int *)(f->esp + OFFSET_ARG * 3)) )
+				f->eax = write ( 
+					*(int *)(f->esp + OFFSET_ARG), 
+					*(char **)(f->esp + (OFFSET_ARG * 2)), 
+					*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );
+			else
+				exit (-1);
 			break;
 
 		case SYS_SEEK: 
-			seek( 
-				*(int *)(f->esp + (OFFSET_ARG * 1)), 
-				*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG))
+					&& is_user_vaddr((unsigned int *)(f->esp + OFFSET_ARG * 2)) )
+				seek( 
+					*(int *)(f->esp + OFFSET_ARG ), 
+					*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
+			else
+				exit (-1);
 			break;
 
 		case SYS_TELL: 
-			f->eax = tell ( *(int *)(f->esp + (OFFSET_ARG * 1)) );
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
+				f->eax = tell ( *(int *)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
 			break;
 
 		case SYS_CLOSE: 
-			close ( *(int *)(f->esp + (OFFSET_ARG * 1)) );
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
+				close ( *(int *)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
 			break;
 
 		default:
@@ -134,7 +174,7 @@ exit (int status)
 pid_t 
 exec (const char *cmd_line)
 {
-	if( ! is_valid_usr_ptr (cmd_line) ) 
+	if( ! is_valid_usr_ptr (cmd_line, 0) ) 
  		exit(-1);
  	
  	lock_acquire (&syscall_lock);
@@ -173,7 +213,7 @@ wait (pid_t pid)
 bool 
 create (const char *file, unsigned initial_size)
 {
- 	if( ! is_valid_usr_ptr (file) ) 
+ 	if( ! is_valid_usr_ptr (file, initial_size) ) 
  		exit(-1);
 	
 	lock_acquire (&syscall_lock);
@@ -188,7 +228,7 @@ create (const char *file, unsigned initial_size)
 bool 
 remove (const char *file)
 {
- 	if( ! is_valid_usr_ptr (file) ) 
+ 	if( ! is_valid_usr_ptr (file, 0) ) 
  		exit(-1);
 
 	lock_acquire (&syscall_lock);
@@ -204,7 +244,7 @@ remove (const char *file)
 int 
 open (const char *file)
 {
- 	if( ! is_valid_usr_ptr (file) ) 
+ 	if( ! is_valid_usr_ptr (file, 0) ) 
  		exit(-1);
 	
  	lock_acquire (&syscall_lock);
@@ -256,7 +296,7 @@ filesize (int fd)
 int 
 read (int fd, void *buffer, unsigned size)
 {
-	if( !is_valid_usr_ptr (buffer) || !is_valid_fd(fd) ) 
+	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
  		exit(-1);
 
  	lock_acquire (&syscall_lock);
@@ -290,7 +330,7 @@ read (int fd, void *buffer, unsigned size)
 int 
 write (int fd, const void *buffer, unsigned size)
 { 
-	if( !is_valid_usr_ptr (buffer) || !is_valid_fd(fd) ) 
+	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
  		exit(-1);
 
  	lock_acquire (&syscall_lock);
@@ -304,8 +344,7 @@ write (int fd, const void *buffer, unsigned size)
 	{
 		int r = file_write (
 			thread_current ()->fds[fd - FD_INIT],
-			buffer,
-			size );
+			buffer, size );
 		lock_release (&syscall_lock);
 		return r;
 	}
@@ -375,11 +414,12 @@ close (int fd)
  * resources.
  */
 static bool
-is_valid_usr_ptr(const void * ptr)
+is_valid_usr_ptr(const void * ptr, unsigned size)
 {
 	return ((ptr != NULL)
-		&& is_user_vaddr(ptr)
-		&& pagedir_get_page(thread_current()->pagedir, ptr) != 0);	
+		&& is_user_vaddr(ptr) && is_user_vaddr(ptr + size)
+		&& pagedir_get_page(thread_current()->pagedir, ptr) != 0
+		&& pagedir_get_page(thread_current()->pagedir, (ptr+size)) != 0);	
 }
 
 /*
