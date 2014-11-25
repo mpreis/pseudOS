@@ -138,6 +138,19 @@ or filenames can be checked wihtin the shell.
 >> loading.  How does your code ensure this?  How is the load
 >> success/failure status passed back to the thread that calls "exec"?
 
+Each child process holds a semaphore init. sema_down() for this child 
+is done in the thread_create() function. sema_up() is called after 
+loading.
+
+In the exec system call, the current thread tries a sema_down() on his 
+childs init semaphore and has to wait until sema_up() is called after 
+loading. sema_up is called in case of success or failure. 
+
+To tell the parent process whether load is successful or not, a child 
+process has another variable called load_success, which is true in case 
+of success or false in case of failure.
+
+
 >> B8: Consider parent process P with child process C.  How do you
 >> ensure proper synchronization and avoid race conditions when P
 >> calls wait(C) before C exits?  After C exits?  How do you ensure
