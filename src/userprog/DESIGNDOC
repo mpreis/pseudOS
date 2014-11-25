@@ -107,6 +107,26 @@ or filenames can be checked wihtin the shell.
 >> B3: Describe your code for reading and writing user data from the
 >> kernel.
 
+For reading and writing user data similar thing have to be done. Due 
+to the fact, that the user can pass null pointers, unmapped virtual 
+memory or a pointer to kernel memory space we have to check all of 
+these possibilities. This is done in the function is_valid_usr_ptr().
+
+As you can read in B2, in our project all file descriptors of a 
+specific thread are hold in an thread-local array with size 128. 
+0, 1 are resevered for STDIN_FILENO and STDOUT_FILENO. These two 
+cases are handled seperatly for reading from the keyboard with 
+input_getc() and writing to the concole with putbuf(). 
+
+In any other case we check if the file descriptor is between 2 and 128, 
+which means a valid file descriptor in our operating system. Furthermore 
+we have to check if the file descriptor is not NULL. 
+If all checks passed, we read and write with the given file_read() and 
+file_write() functions. 
+
+We use a lock to ensure that we avoid race conditions.  
+
+
 >> B4: Suppose a system call causes a full page (4,096 bytes) of data
 >> to be copied from user space into the kernel.  What is the least
 >> and the greatest possible number of inspections of the page table
