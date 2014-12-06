@@ -15,8 +15,8 @@
 #include <list.h>
 #include <string.h>
 
-#define OFFSET_ARG 4			 /* pseudOS: Offest of arguments on the stack. */
-static struct lock syscall_lock; /* pseudOS: Lock variable to ensure a secure execution of a system-call. */
+#define OFFSET_ARG 4							/* pseudOS: Offest of arguments on the stack. */
+static struct lock syscall_lock;	/* pseudOS: Lock variable to ensure a secure execution of a system-call. */
 
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_usr_ptr(const void * ptr, unsigned size);	/* pseudOS: Checks if the given pointer is a valid user-space pointer. */
@@ -412,14 +412,24 @@ close (int fd)
  * of invalid pointers must be rejected without harm to the kernel or other 
  * running processes, by terminating the offending process and freeing its 
  * resources.
+ *
+ * TODO: check if each page is mapped
  */
 static bool
 is_valid_usr_ptr(const void * ptr, unsigned size)
 {
-	return ((ptr != NULL)
-		&& is_user_vaddr(ptr) && is_user_vaddr(ptr + size)
-		&& pagedir_get_page(thread_current()->pagedir, ptr) != 0
-		&& pagedir_get_page(thread_current()->pagedir, (ptr+size)) != 0);	
+	if(ptr == NULL || ! is_user_vaddr(ptr) || ! is_user_vaddr(ptr + size))
+		return false;
+
+	/* Check if every page is mapped */
+	uint32_t *pg;
+	for (	pg = pg_round_down (ptr); 
+			pg <= pg_round_down (ptr + size);
+			pg += PGSIZE
+		)
+		if ( ! pagedir_get_page (thread_current ()->pagedir, pg) )
+			return false;
+	return true;
 }
 
 /*
