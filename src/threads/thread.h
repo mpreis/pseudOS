@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include <hash.h>
 
 #include "synch.h"
 
@@ -109,6 +110,14 @@ struct thread
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
+
+    /* pseudOS: Project 2 */
+    struct list childs;                     /* pseudOS: List of children of this thread. */
+    struct child_process* child_info;       /* pseudOS: Holds information of this thread. */ 
+    struct file* executable;                /* pseudOS: Represents the executable which is executed by this thread.*/
+
+    /* pseudOS: Project 3 */
+    struct hash* spt;                       /* pseudOS: Supplemental page table. */
 #endif
 
     /* Owned by thread.c. */
@@ -124,9 +133,7 @@ struct thread
 
     /* pseudOS: Project 2 */
     struct file* fds[FD_ARR_DEFAULT_LENGTH];/* pseudOS: This array holds pointers of all open files. */
-    struct list childs;                     /* pseudOS: List of children of this thread. */
-    struct child_process* child_info;       /* pseudOS: Holds information of this thread. */ 
-    struct file* executable;                /* pseudOS: Represents the executable which is executed by this thread.*/
+    
   };
 
 /* If false (default), use round-robin scheduler.

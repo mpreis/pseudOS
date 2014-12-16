@@ -18,6 +18,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "vm/frame.h"
+#include "vm/page.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv);
@@ -435,15 +436,19 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Get a page of memory. */
       uint8_t *kpage = palloc_get_page (PAL_USER);
-      frame_table_insert (kpage);
       if (kpage == NULL)
         return false;
+      frame_table_insert (kpage);
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           frame_table_remove (kpage);
+<<<<<<< HEAD
           palloc_free_page (kpage);
+=======
+          spt_remove (thread_current ()->spt, kpage);
+>>>>>>> 2cbab18a02bde1e3ad2c0821eb1d2b964a10350b
           return false; 
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -452,10 +457,15 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (!install_page (upage, kpage, writable)) 
         {
           frame_table_remove (kpage);
+<<<<<<< HEAD
           palloc_free_page (kpage);
+=======
+          spt_remove (thread_current ()->spt, kpage);
+>>>>>>> 2cbab18a02bde1e3ad2c0821eb1d2b964a10350b
           return false; 
         }
 
+      spt_insert (thread_current ()->spt, kpage);
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
@@ -473,16 +483,20 @@ setup_stack (void **esp)
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  frame_table_insert (kpage);
   if (kpage != NULL) 
     {
+      frame_table_insert (kpage);
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
+      if (success) 
+      {
+        spt_insert (thread_current ()->spt, kpage);
         *esp = PHYS_BASE;
+      }
       else
       {
         frame_table_remove (kpage);
         palloc_free_page (kpage);
+        spt_remove (thread_current ()->spt, kpage);
       }
     }
     
@@ -498,7 +512,11 @@ init_stack (const char *file_name, void **esp, char **argv)
   // pseudOS: push all function parameters on the stack
   char *token;
   char **argv_ptrs = palloc_get_page (PAL_USER);
+  if(argv_ptrs == NULL) 
+    return false;
   frame_table_insert (argv_ptrs);
+  spt_insert (thread_current ()->spt, argv_ptrs);
+
   int argc = 0;
 
   //pseudOS: push all data of args on the stack
@@ -543,7 +561,11 @@ init_stack (const char *file_name, void **esp, char **argv)
   memcpy(*esp, &n, sizeof(void *));
 
   frame_table_remove (argv_ptrs);
+<<<<<<< HEAD
   palloc_free_page(argv_ptrs);
+=======
+  spt_remove (thread_current ()->spt, argv_ptrs);
+>>>>>>> 2cbab18a02bde1e3ad2c0821eb1d2b964a10350b
 
   return true;
 }

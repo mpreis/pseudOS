@@ -203,7 +203,7 @@ timer_interrupt (struct intr_frame *args UNUSED)
   struct list_elem *e = list_begin (&blocked_list); 
   struct thread *t = list_entry (e, struct thread, elem);
   
-  int current_ticks = timer_ticks ();
+  unsigned current_ticks = timer_ticks ();
   while (e != list_end (&blocked_list) && t->ticks_to_sleep <= current_ticks)
   {
       list_pop_front (&blocked_list);

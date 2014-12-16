@@ -3,8 +3,11 @@
 #include <stdio.h>
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
+#include "threads/palloc.h"
 #include "threads/thread.h"
 #include "userprog/syscall.h"
+#include "vm/frame.h"
+#include "vm/page.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -123,9 +126,6 @@ kill (struct intr_frame *f)
 static void
 page_fault (struct intr_frame *f) 
 {
-  // bool not_present;  /* True: not-present page, false: writing r/o page. */
-  // bool write;        /* True: access was write, false: access was read. */
-  // bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
 
   /* Obtain faulting address, the virtual address that was
@@ -137,6 +137,35 @@ page_fault (struct intr_frame *f)
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
+  if(is_valid_usr_ptr(fault_addr, 0))
+  {
+    struct spt_entry_t *e = spt_lookup (thread_current ()->spt, fault_addr);
+    if(e == NULL) 
+    {
+      void *vaddr = palloc_get_page (PAL_USER);
+      if(vaddr != NULL) 
+      {
+        frame_table_insert (vaddr);
+        spt_insert (thread_current ()->spt, vaddr);
+        return;
+      }
+    }
+    else
+    {
+      if(e->swap_ptr != NULL) 
+      {
+        //TODO: SWAP
+        return;
+      }
+      if(e->file_ptr != NULL) 
+      {
+        //TODO: FILE
+        return;
+      }
+    }
+  }
+
+
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
   intr_enable ();
@@ -144,27 +173,9 @@ page_fault (struct intr_frame *f)
   /* Count page faults. */
   page_fault_cnt++;
 
-  /* Determine cause. */
-  // not_present = (f->error_code & PF_P) == 0;
-  // write = (f->error_code & PF_W) != 0;
-  // user = (f->error_code & PF_U) != 0;
-
   /* pseudOS: bad-tests fix */
   f->eip = (void (*) (void)) f->eax;
   f->eax = 0xffffffff;
   exit (-1);
-
-  /* pseudOS: origin code */
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  /*
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");
-  kill (f);
-  */
 }
 
