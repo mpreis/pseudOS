@@ -15,14 +15,14 @@ struct frame_table_t
 struct frame_table_entry_t
 {
 	struct list_elem ftelem;
-	void *page_ptr;
+	void *vaddr;
 	int used_frames_idx;
 };
 
 
 void frame_table_init (void);
 void init_frame_table(struct frame_table_t *ft);
-void frame_table_insert (void *upage);
-void frame_table_remove (void *upage);
+void frame_table_insert (void *vaddr);
+void frame_table_remove (void *vaddr);
 
 #endif

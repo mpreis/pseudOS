@@ -19,7 +19,6 @@
 static struct lock syscall_lock;	/* pseudOS: Lock variable to ensure a secure execution of a system-call. */
 
 static void syscall_handler (struct intr_frame *);
-static bool is_valid_usr_ptr(const void * ptr, unsigned size);	/* pseudOS: Checks if the given pointer is a valid user-space pointer. */
 static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descriptor is valid. */
 
 void
@@ -412,10 +411,8 @@ close (int fd)
  * of invalid pointers must be rejected without harm to the kernel or other 
  * running processes, by terminating the offending process and freeing its 
  * resources.
- *
- * TODO: check if each page is mapped
  */
-static bool
+bool
 is_valid_usr_ptr(const void * ptr, unsigned size)
 {
 	if(ptr == NULL || ! is_user_vaddr(ptr) || ! is_user_vaddr(ptr + size))
@@ -424,7 +421,7 @@ is_valid_usr_ptr(const void * ptr, unsigned size)
 	/* Check if every page is mapped */
 	uint32_t *pg;
 	for (	pg = pg_round_down (ptr); 
-			pg <= pg_round_down (ptr + size);
+			pg <= (uint32_t *) pg_round_down (ptr + size);
 			pg += PGSIZE
 		)
 		if ( ! pagedir_get_page (thread_current ()->pagedir, pg) )

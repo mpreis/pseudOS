@@ -1,5 +1,6 @@
 #include "threads/thread.h"
 #include <debug.h>
+#include <hash.h>
 #include <stddef.h>
 #include <random.h>
 #include <stdio.h>
@@ -14,6 +15,7 @@
 #include "threads/vaddr.h"
 #include "threads/fixed-point.h"
 #include "threads/malloc.h"
+#include "vm/page.h"
 
 #include "../devices/timer.h"
 
@@ -259,6 +261,9 @@ thread_create (const char *name, int priority,
   sema_init (&t->child_info->init, 1);
   sema_down (&t->child_info->init); /* pseudOS */
   list_push_back (&thread_current ()->childs, &t->child_info->childelem);
+
+  t->spt = malloc(sizeof(struct hash));
+  spt_init(t->spt);
 
   intr_set_level (old_level);
   

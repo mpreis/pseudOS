@@ -9,7 +9,7 @@
 
 #define FRAME_FAILED -1
 
-static struct frame_table_entry_t *frame_table_get_entry (void *upage);
+static struct frame_table_entry_t *frame_table_get_entry (void *vaddr);
 static int frame_table_get_free_frame (void);
 static struct frame_table_t *frame_table;
 
@@ -29,9 +29,9 @@ init_frame_table(struct frame_table_t *ft)
 }
 
 void
-frame_table_insert (void *upage)
+frame_table_insert (void *vaddr)
 {
-	struct frame_table_entry_t *fte = frame_table_get_entry (upage);
+	struct frame_table_entry_t *fte = frame_table_get_entry (vaddr);
 	if(fte != NULL)
 	{
 		// frame already exists
@@ -44,15 +44,15 @@ frame_table_insert (void *upage)
 	bitmap_set (frame_table->used_frames, new_frame_idx , true);
 	
 	struct frame_table_entry_t *new_fte = malloc(sizeof(struct frame_table_entry_t));
-	new_fte->page_ptr = upage;
+	new_fte->vaddr = vaddr;
 	new_fte->used_frames_idx = new_frame_idx;
 	list_push_back (&frame_table->frames, &new_fte->ftelem);
 }
 
 void
-frame_table_remove (void *upage)
+frame_table_remove (void *vaddr)
 {
-	struct frame_table_entry_t *fte = frame_table_get_entry (upage);
+	struct frame_table_entry_t *fte = frame_table_get_entry (vaddr);
 	if(fte != NULL)
 	{
 		bitmap_set (frame_table->used_frames, fte->used_frames_idx, false);
@@ -61,7 +61,7 @@ frame_table_remove (void *upage)
 }
 
 static struct frame_table_entry_t *
-frame_table_get_entry (void *upage)
+frame_table_get_entry (void *vaddr)
 {
 	struct list_elem *e;
 	for (e = list_begin (&frame_table->frames); 
@@ -69,7 +69,7 @@ frame_table_get_entry (void *upage)
 		 e = list_next (e))
 	{
 		struct frame_table_entry_t *fte = list_entry (e, struct frame_table_entry_t, ftelem);
-		if(fte->page_ptr == upage)
+		if(fte->vaddr == vaddr)
 			return fte;
 	}
 	return NULL;
