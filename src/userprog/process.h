@@ -7,6 +7,7 @@
 
 /* pseudOS: Project 2 */
 #define DEFAULT_EXIT_STATUS -1 /* pseudOS: The default exit status.*/
+#define MAX_STACK_SIZE 8388608 /* pseudOS: Maximum size of the stack is 8MB */
 
 struct child_process
   {
