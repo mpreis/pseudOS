@@ -444,11 +444,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
           frame_table_remove (kpage);
-<<<<<<< HEAD
-          palloc_free_page (kpage);
-=======
           spt_remove (thread_current ()->spt, kpage);
->>>>>>> 2cbab18a02bde1e3ad2c0821eb1d2b964a10350b
+          palloc_free_page (kpage);
           return false; 
         }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
@@ -457,11 +454,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       if (!install_page (upage, kpage, writable)) 
         {
           frame_table_remove (kpage);
-<<<<<<< HEAD
-          palloc_free_page (kpage);
-=======
           spt_remove (thread_current ()->spt, kpage);
->>>>>>> 2cbab18a02bde1e3ad2c0821eb1d2b964a10350b
+          palloc_free_page (kpage);
           return false; 
         }
 
@@ -561,11 +555,8 @@ init_stack (const char *file_name, void **esp, char **argv)
   memcpy(*esp, &n, sizeof(void *));
 
   frame_table_remove (argv_ptrs);
-<<<<<<< HEAD
-  palloc_free_page(argv_ptrs);
-=======
   spt_remove (thread_current ()->spt, argv_ptrs);
->>>>>>> 2cbab18a02bde1e3ad2c0821eb1d2b964a10350b
+  palloc_free_page(argv_ptrs);
 
   return true;
 }
