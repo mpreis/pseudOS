@@ -146,7 +146,7 @@ page_fault (struct intr_frame *f)
       if(vaddr != NULL) 
       {
         frame_table_insert (vaddr);
-        spt_insert (thread_current ()->spt, vaddr);
+        spt_insert (thread_current ()->spt, vaddr, true); // TODO: check if writeable = true is correct
         return;
       }
     }

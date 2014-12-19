@@ -262,8 +262,10 @@ thread_create (const char *name, int priority,
   sema_down (&t->child_info->init); /* pseudOS */
   list_push_back (&thread_current ()->childs, &t->child_info->childelem);
 
+#ifdef USERPROG
   t->spt = malloc(sizeof(struct hash));
   spt_init(t->spt);
+#endif
 
   intr_set_level (old_level);
   
@@ -357,6 +359,7 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
+  
   struct thread *t = thread_current ();
   sema_up (&t->child_info->alive);        /* pseudOS */
   sema_up (&t->child_info->init);        /* pseudOS */
