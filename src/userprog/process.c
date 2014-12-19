@@ -438,13 +438,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       uint8_t *kpage = palloc_get_page (PAL_USER);
       if (kpage == NULL)
         return false;
-      frame_table_insert (kpage);
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
-          frame_table_remove (kpage);
-          spt_remove (thread_current ()->spt, kpage);
           palloc_free_page (kpage);
           return false; 
         }
@@ -453,13 +450,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable)) 
         {
-          frame_table_remove (kpage);
-          spt_remove (thread_current ()->spt, kpage);
           palloc_free_page (kpage);
           return false; 
         }
 
-      spt_insert (thread_current ()->spt, kpage);
+      frame_table_insert (upage);
+      spt_insert (thread_current ()->spt, upage, writable);
+
       /* Advance. */
       read_bytes -= page_read_bytes;
       zero_bytes -= page_zero_bytes;
@@ -475,22 +472,22 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
-
+  bool writable = true;
+      
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
-      frame_table_insert (kpage);
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      uint8_t *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
+      success = install_page (upage, kpage, writable);
       if (success) 
       {
-        spt_insert (thread_current ()->spt, kpage);
+        frame_table_insert (upage);
+        spt_insert (thread_current ()->spt, upage, writable);
         *esp = PHYS_BASE;
       }
       else
       {
-        frame_table_remove (kpage);
         palloc_free_page (kpage);
-        spt_remove (thread_current ()->spt, kpage);
       }
     }
     
@@ -505,11 +502,9 @@ init_stack (const char *file_name, void **esp, char **argv)
 {
   // pseudOS: push all function parameters on the stack
   char *token;
-  char **argv_ptrs = palloc_get_page (PAL_USER);
+  char **argv_ptrs = palloc_get_page (0);
   if(argv_ptrs == NULL) 
     return false;
-  frame_table_insert (argv_ptrs);
-  spt_insert (thread_current ()->spt, argv_ptrs);
 
   int argc = 0;
 
@@ -554,8 +549,6 @@ init_stack (const char *file_name, void **esp, char **argv)
   *esp -= sizeof(void *);
   memcpy(*esp, &n, sizeof(void *));
 
-  frame_table_remove (argv_ptrs);
-  spt_remove (thread_current ()->spt, argv_ptrs);
   palloc_free_page(argv_ptrs);
 
   return true;

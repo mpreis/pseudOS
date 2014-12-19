@@ -6,8 +6,7 @@
 #include "threads/malloc.h"
 #include "threads/synch.h"
 
-static struct lock spt_lock;	/* pseudOS: Lock variable to ensure a secure execution of a system-call. */
-
+static struct lock spt_lock;
 
 void 
 spt_init(struct hash *spt)
@@ -17,12 +16,13 @@ spt_init(struct hash *spt)
 }
 
 void
-spt_insert (struct hash *spt, void *vaddr)
+spt_insert (struct hash *spt, void *vaddr, bool writeable)
 {
 	lock_acquire (&spt_lock);
 	ASSERT(spt_lookup (spt, vaddr) == NULL);
 	struct spt_entry_t *e = malloc(sizeof(struct spt_entry_t));
 	e->vaddr = vaddr;
+	e->writeable = writeable;
 	e->swap_ptr = NULL;
 	e->file_ptr = NULL;
 	e->lru_ticks = timer_ticks();
