@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "userprog/gdt.h"
+#include "userprog/process.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
@@ -22,7 +23,6 @@
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp, char **argv);
-static bool stack_growth (void *vaddr);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -547,7 +547,7 @@ init_stack (const char *file_name, void **esp, char **argv)
 /* pseudOS: As long as the stack is not bigger than MAX_STACK_SIZE , 
  * the stack grows by adding a new page of the user space to it.
 */
-static bool
+bool
 stack_growth (void *vaddr) 
 {
   if((PHYS_BASE - vaddr) >= MAX_STACK_SIZE)

@@ -5,6 +5,7 @@
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
+#include "userprog/process.h"
 #include "userprog/syscall.h"
 #include "vm/frame.h"
 #include "vm/page.h"
@@ -142,6 +143,11 @@ page_fault (struct intr_frame *f)
     struct spt_entry_t *e = spt_lookup (thread_current ()->spt, fault_addr);
     if(e == NULL) 
     {
+      //pseudOS: if a pagefault occurs between esp and (esp - 32) the stack has to grow
+      if(fault_addr >= f->esp - 32)
+        if(!stack_growth (fault_addr))
+          return;
+      
       void *vaddr = palloc_get_page (PAL_USER);
       if(vaddr != NULL) 
       {
@@ -157,6 +163,7 @@ page_fault (struct intr_frame *f)
         //TODO: SWAP
         return;
       }
+
       if(e->file_ptr != NULL) 
       {
         //TODO: FILE

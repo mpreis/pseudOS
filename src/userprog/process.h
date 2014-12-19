@@ -25,5 +25,6 @@ tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
+bool stack_growth (void *vaddr);    /* pseudOS: Adds a page to the stack */
 
 #endif /* userprog/process.h */

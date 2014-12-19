@@ -25,7 +25,7 @@ void
 syscall_init (void) 
 {
 	lock_init (&syscall_lock);
-  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
 void
@@ -181,12 +181,12 @@ exec (const char *cmd_line)
  	pid_t pid = process_execute (cmd_line);
  	struct child_process *cp = thread_get_child (pid);
   
-  sema_down (&cp->init);
+	sema_down (&cp->init);
 	
-  lock_release (&syscall_lock);
-  if(cp->load_success) 
-  	return pid;
-  return -1;
+	lock_release (&syscall_lock);
+	if(cp->load_success) 
+		return pid;
+	return -1;
 }
 
 /*
@@ -202,7 +202,7 @@ wait (pid_t pid)
 		sema_down (&cp->alive);
 		return cp->exit_status;
 	}
-  return -1;
+	return -1;
 }
 
 /*
@@ -233,7 +233,7 @@ remove (const char *file)
 	lock_acquire (&syscall_lock);
 	bool b = filesys_remove (file);
 	lock_release (&syscall_lock);
-  return b;
+	return b;
 }
 
 /*
@@ -243,7 +243,7 @@ remove (const char *file)
 int 
 open (const char *file)
 {
- 	if( ! is_valid_usr_ptr (file, 0) ) 
+	if( ! is_valid_usr_ptr (file, 0) ) 
  		exit(-1);
 	
  	lock_acquire (&syscall_lock);
@@ -269,7 +269,7 @@ open (const char *file)
 		return fd;
 	}
 	lock_release (&syscall_lock);
-  return -1;
+	return -1;
 }
 
 /*
@@ -283,8 +283,8 @@ filesize (int fd)
 
 	lock_acquire (&syscall_lock);
 	int size = file_length ( thread_current ()->fds[fd - FD_INIT] );
-  lock_release (&syscall_lock);
-  return size;
+	lock_release (&syscall_lock);
+	return size;
 }
 
 /*
@@ -380,7 +380,7 @@ tell (int fd)
 	lock_acquire (&syscall_lock);
 	unsigned pos = file_tell( (struct file *) thread_current ()->fds[fd - FD_INIT] ); 
 	lock_release (&syscall_lock);
-  return pos;
+	return pos;
 }
 
 /*
