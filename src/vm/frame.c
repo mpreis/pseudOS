@@ -5,6 +5,7 @@
 #include "threads/loader.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 #include <stdlib.h>
 
 #define FRAME_FAILED -1
@@ -19,6 +20,7 @@ void
 frame_table_init (void)
 {
 	frame_table = malloc(sizeof(struct frame_table_t));
+	lock_init (&ft_lock);
 	init_frame_table (frame_table);
 }
 
@@ -35,12 +37,12 @@ frame_table_insert (void *vaddr)
 {
 	struct frame_table_entry_t *fte = frame_table_get_entry (vaddr);
 	if(fte != NULL) return;	// frame already exists
-
-	lock_acquire (&ft_lock);
 	
 	int new_frame_idx = frame_table_get_free_frame ();
 	ASSERT (new_frame_idx != FRAME_FAILED);
-
+	
+	lock_acquire (&ft_lock);
+	
 	bitmap_set (frame_table->used_frames, new_frame_idx , true);
 	
 	struct frame_table_entry_t *new_fte = malloc(sizeof(struct frame_table_entry_t));
@@ -67,6 +69,9 @@ frame_table_remove (void *vaddr)
 static struct frame_table_entry_t *
 frame_table_get_entry (void *vaddr)
 {
+	if(vaddr == NULL)
+		return NULL;
+
 	lock_acquire (&ft_lock);
 	struct list_elem *e;
 	for (e = list_begin (&frame_table->frames); 

@@ -126,6 +126,10 @@ process_exit (void)
   for(i = 0; i < FD_ARR_DEFAULT_LENGTH; i++)
     close(i);
 
+  /* pseudOS: Frees all resources of the supplemental page table.
+     Frees also all occupied frame table entries. */
+  spt_free(cur->spt);
+  
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;
