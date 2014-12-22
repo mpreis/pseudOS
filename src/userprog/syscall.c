@@ -396,25 +396,26 @@ mmap (int fd, void *addr)
 	if(! is_valid_fd (fd) || fd < FD_INIT) 		/* pseudOS: 5. */
 		return MAP_FAILED;
 	
-	struct file *f = thread_current ()->fds[fd - FD_INIT];
+	struct thread *t = thread_current ();
+	struct file *f = t->fds[fd - FD_INIT];
 	if(f == NULL) 
 		return MAP_FAILED;
 	
 	off_t flen = file_length (f);
+	//unsigned nr_of_pages = (flen / PGSIZE) + 1;
 	if(	   flen == 0							/* pseudOS: 1. */
 		|| addr == 0 							/* pseudOS: 4. */
-		|| ! is_valid_usr_ptr (addr, flen) 		/* pseudOS: 3. */
+		//|| ! is_valid_usr_ptr (addr, nr_of_pages) /* pseudOS: 3. */
 		|| ((uint32_t)addr % PGSIZE) != 0 )		/* pseudOS: 2. */
 		return MAP_FAILED;
-	
-	struct thread *t = thread_current ();
 	
 	lock_acquire (&syscall_lock);
 	struct mapped_file_t *mfile = malloc(sizeof(struct mapped_file_t));
 	if (!mfile) return MAP_FAILED;
-	mfile->fd = fd;
+	mfile->file = f;
 	mfile->addr = addr;
 	mfile->mapid = (mapid_t) t->next_mapid++;
+	list_init (&mfile->spt_entries);
 	list_push_back (&t->mapped_files, &mfile->elem);
 
 	off_t ofs = 0;
@@ -423,19 +424,21 @@ mmap (int fd, void *addr)
 		uint32_t read_bytes = (flen > PGSIZE ) ? PGSIZE : flen ;
 		uint32_t zero_bytes = PGSIZE - read_bytes;
 
-		if( ! spt_insert (t->spt, f, ofs, (uint8_t *)addr, 
-				read_bytes, zero_bytes, true, SPT_ENTRY_TYPE_MMAP) )
+		struct spt_entry_t *spte = spt_insert (t->spt, f, ofs, (uint8_t *)addr, 
+				read_bytes, zero_bytes, true, SPT_ENTRY_TYPE_MMAP);
+		if(! spte)
 		{
 			munmap (mfile->mapid);
 			lock_release (&syscall_lock);
 			return MAP_FAILED;
 		}
 
+		list_push_back (&mfile->spt_entries, &spte->listelem);
+
 		addr += PGSIZE;
  		flen -= read_bytes;
 		ofs  += read_bytes;
 	}
-
 	lock_release (&syscall_lock);
 	return mfile->mapid;
 }
@@ -443,7 +446,40 @@ mmap (int fd, void *addr)
 void 
 munmap (mapid_t mapping UNUSED)
 {
-
+	printf(" --- munmap\n");
+	lock_acquire (&syscall_lock);
+	struct thread *t = thread_current ();
+	struct list_elem *e;
+	for (e  = list_begin (&t->mapped_files);
+		 e != list_end (&t->mapped_files);
+		 e  = list_next (e))
+	{
+		struct mapped_file_t *mfile = list_entry (e, struct mapped_file_t, elem);
+		if (mfile->mapid == mapping)
+		{
+			struct file *file = file_reopen (mfile->file);
+			struct list_elem *mfe;
+			for (mfe  = list_begin (&mfile->spt_entries);
+				 mfe != list_end (&mfile->spt_entries);
+				 mfe  = list_next (mfe))
+			{
+				struct spt_entry_t *spte = list_entry (mfe, struct spt_entry_t, listelem);
+				if (pagedir_is_dirty (t->pagedir, spte->upage))
+				{
+					lock_acquire (&syscall_lock);
+					file_write_at (file, spte->upage, spte->read_bytes, spte->ofs);
+					lock_release (&syscall_lock);
+				}
+				spt_remove (t->spt, &spte->upage);		/* remove supplemental page table entry. */
+				spt_entry_free (&spte->hashelem, NULL);	/* free resources of entry. */
+			}
+			file_close (file);
+			list_remove (&mfile->elem);
+			free (mfile);
+		}
+	} /* end iteration over mapped files */
+	printf(" --- munmap end\n");
+	lock_release (&syscall_lock);
 }
 
 /* 
@@ -462,8 +498,12 @@ munmap (mapid_t mapping UNUSED)
 bool
 is_valid_usr_ptr(const void * ptr, unsigned size)
 {
+	lock_acquire (&syscall_lock);
 	if(ptr == NULL || ! is_user_vaddr(ptr) || ! is_user_vaddr(ptr + size))
+	{
+		lock_release (&syscall_lock);
 		return false;
+	}
 
 	/* Check if every page is mapped */
 	uint32_t *pg;
@@ -471,8 +511,14 @@ is_valid_usr_ptr(const void * ptr, unsigned size)
 			pg <= (uint32_t *) pg_round_down (ptr + size);
 			pg += PGSIZE
 		)
+	{
 		if ( ! pagedir_get_page (thread_current ()->pagedir, pg) )
+		{
+			lock_release (&syscall_lock);
 			return false;
+		}
+	}
+	lock_release (&syscall_lock);
 	return true;
 }
 

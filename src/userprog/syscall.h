@@ -11,9 +11,10 @@ bool is_valid_usr_ptr(const void * ptr, unsigned size);	/* pseudOS: Checks if th
 struct mapped_file_t 
 {
   struct list_elem elem;
+  struct file *file;
   int mapid;
-  int fd;
   void *addr;
+  struct list spt_entries;
 };
 
 #endif /* userprog/syscall.h */

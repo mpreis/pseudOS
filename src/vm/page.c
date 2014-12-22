@@ -6,21 +6,36 @@
 #include "devices/timer.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
+#include "threads/palloc.h"
 #include "threads/synch.h"
+#include "threads/interrupt.h"
 #include "userprog/pagedir.h"
+#include "userprog/process.h"
+#include "filesys/off_t.h"
+#include "filesys/file.h"
 
-static void spt_entry_free (struct hash_elem *e, void *aux);
+#include <string.h>
+
+static bool spt_load_page_swap (struct spt_entry_t *spte);
+static bool spt_load_page_file (struct spt_entry_t *spte);
+
+typedef bool (*spt_load_page_t)(struct spt_entry_t *);
 
 static struct lock spt_lock;
-
+static spt_load_page_t load_page[SPT_ENTRY_TYPE_CTR];
+	
 void 
 spt_init(struct hash *spt)
 {
 	lock_init (&spt_lock);
 	hash_init (spt, spt_entry_hash, spt_entry_less, NULL);
+
+	load_page[SPT_ENTRY_TYPE_FILE] = spt_load_page_file;
+	load_page[SPT_ENTRY_TYPE_MMAP] = spt_load_page_file;
+	load_page[SPT_ENTRY_TYPE_SWAP] = spt_load_page_swap;
 }
 
-bool
+struct spt_entry_t * 
 spt_insert (struct hash *spt, struct file *file, off_t ofs, 
 	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes,
 	bool writable, enum spt_entry_type type)
@@ -40,7 +55,13 @@ spt_insert (struct hash *spt, struct file *file, off_t ofs,
 	
 	struct hash_elem *he = hash_insert (spt, &e->hashelem);
 	lock_release (&spt_lock);
-  	return he == NULL;
+
+	if(he != NULL) 
+	{
+		free (e);
+		return NULL;
+	}
+	return e;
 }
 
 void
@@ -95,23 +116,73 @@ spt_free (struct hash *spt)
 	free (spt);
 }
 
-static void
+void
 spt_entry_free (struct hash_elem *e, void *aux UNUSED)
 {
 	struct thread *t = thread_current ();
-	struct spt_entry_t *spt_e = hash_entry (e, struct spt_entry_t, hashelem);
+	struct spt_entry_t *spte = hash_entry (e, struct spt_entry_t, hashelem);
 
-	if(pagedir_is_dirty (t->pagedir, spt_e->upage))
-	{
-		// TODO: handle dirty page when deallocating
-		pagedir_set_dirty (t->pagedir, spt_e->upage, false);
-	}
-	if(pagedir_is_accessed (t->pagedir, spt_e->upage))
-	{
-		// TODO: handle accessed page when deallocating
-		pagedir_set_accessed (t->pagedir, spt_e->upage, false);
-	}
+	if(pagedir_is_dirty (t->pagedir, spte->upage))
+		pagedir_set_dirty (t->pagedir, spte->upage, false);
 
-	frame_table_remove (spt_e->upage);
-	free(spt_e);
+	if(pagedir_is_accessed (t->pagedir, spte->upage))
+		pagedir_set_accessed (t->pagedir, spte->upage, false);
+
+	frame_table_remove (&spte->upage);	/* release frame. */
+	// list_remove (&spte->listelem);	/* remove mapped files list entry. */
+	// free (&spte->upage);	/* free allocated page. */
+	free (spte);							/* free entry itself. */
+}
+
+bool
+spt_load_page (struct spt_entry_t *spte)
+{
+	if(spte == NULL) return false;
+	return load_page[spte->type](spte);
+}
+
+static bool
+spt_load_page_swap (struct spt_entry_t *spte)
+{
+	printf(" --- spt_load_page_swap %p \n", spte);
+	return false;
+}
+
+static bool
+spt_load_page_file (struct spt_entry_t *spte)
+{
+	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
+	
+	if (!install_page (spte->upage, kpage, spte->writable)) 
+	{
+		palloc_free_page (kpage);
+		return false; 
+	}
+	
+	if (! frame_table_insert (spte->upage))
+	{
+		palloc_free_page (kpage);
+		return false; 
+	}
+	
+	if(spte->read_bytes > 0)
+	{
+		lock_acquire (&spt_lock);
+		
+		enum intr_level old_level = intr_enable ();
+		off_t read_bytes = file_read_at (spte->file, spte->upage, spte->read_bytes, spte->ofs);
+		intr_set_level (old_level);
+
+		if((off_t)spte->read_bytes != read_bytes)
+		{
+			palloc_free_page (kpage);
+			frame_table_remove (spte->upage);
+			lock_release (&spt_lock);
+			return false;
+		} 
+		memset(kpage + spte->read_bytes, 0, spte->zero_bytes);
+		lock_release (&spt_lock);
+
+	}
+	return true;
 }

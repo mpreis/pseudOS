@@ -137,37 +137,11 @@ page_fault (struct intr_frame *f)
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
-  if(is_valid_usr_ptr(fault_addr, 0))
-  {
-    struct spt_entry_t *e = spt_lookup (thread_current ()->spt, fault_addr);
-    if(e == NULL) 
-    {
-      void *vaddr = palloc_get_page (PAL_USER);
-      if(vaddr != NULL) 
-      {
-        // TODO
-        //frame_table_insert (vaddr);
-        //spt_insert (thread_current ()->spt, vaddr, true); // TODO: check if writeable = true is correct
-        return;
-      }
-    }
-    else
-    {
-      // TODO
+  struct spt_entry_t *spte = spt_lookup (thread_current ()->spt, fault_addr);
+  if(spte && spt_load_page (spte))
       return;
-      // if(e->swap_ptr != NULL) 
-      // {
-      //   //TODO: SWAP
-      //   return;
-      // }
-      // if(e->file_ptr != NULL) 
-      // {
-      //   //TODO: FILE
-      //   return;
-      // }
-    }
-  }
 
+  // TODO: SWAP, file, ...
 
   /* Turn interrupts back on (they were only off so that we could
      be assured of reading CR2 before it changed). */
@@ -181,4 +155,3 @@ page_fault (struct intr_frame *f)
   f->eax = 0xffffffff;
   exit (-1);
 }
-

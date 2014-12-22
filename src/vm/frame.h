@@ -22,7 +22,7 @@ struct frame_table_entry_t
 
 void frame_table_init (void);
 void init_frame_table(struct frame_table_t *ft);
-void frame_table_insert (void *vaddr);
+bool frame_table_insert (void *vaddr);
 void frame_table_remove (void *vaddr);
 
 #endif
