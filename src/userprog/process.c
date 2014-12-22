@@ -555,23 +555,22 @@ init_stack (const char *file_name, void **esp, char **argv)
 bool
 stack_growth (void *vaddr) 
 {
-  if((PHYS_BASE - vaddr) >= MAX_STACK_SIZE)
-    return false;
+  if((PHYS_BASE - pg_round_down(vaddr)) >= MAX_STACK_SIZE)
+    exit(-1);
 
   uint8_t *kpage;
   bool success = false;
   bool writable = true;
-      
+  
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
-      uint8_t *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
+      uint8_t *upage = pg_round_down(vaddr);
       success = install_page (upage, kpage, writable);
       if (success) 
       {
         frame_table_insert (upage);
-        //spt_insert (thread_current ()->spt, NULL, 0, upage, PGSIZE, 0, writable, SPT_ENTRY_TYPE_FILE); 
-        spt_insert (thread_current ()->spt, upage, true);
+        spt_insert (thread_current ()->spt, NULL, 0, upage, PGSIZE, 0, writable, SPT_ENTRY_TYPE_SWAP); 
       }
       else
       {

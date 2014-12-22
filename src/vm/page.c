@@ -5,6 +5,7 @@
 #include "vm/frame.h"
 #include "devices/timer.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
@@ -80,7 +81,7 @@ spt_lookup (struct hash *spt, const void *upage)
   struct spt_entry_t e;
   struct hash_elem *helem;
 
-  e.upage = (void *) upage;
+  e.upage = (void *) pg_round_down(upage);
   helem = hash_find (spt, &e.hashelem);
   return helem != NULL ? hash_entry (helem, struct spt_entry_t, hashelem) : NULL;
 }

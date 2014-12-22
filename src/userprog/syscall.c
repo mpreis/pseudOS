@@ -22,6 +22,8 @@ static struct lock syscall_lock;	/* pseudOS: Lock variable to ensure a secure ex
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descriptor is valid. */
 static void check_args (struct intr_frame *f, int nr_of_args);
+static void check_stack_growth(void *vaddr, void *esp);
+static void check_stack_growth_size(void *vaddr, unsigned size, void *esp);
 
 void
 syscall_init (void) 
@@ -59,6 +61,7 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_CREATE: 
 			check_args (f, 2);
+			//check_stack_growth_size((f->esp + OFFSET_ARG), *(unsigned int *)(f->esp + OFFSET_ARG * 2), f->esp);
 			f->eax = create ( 
 				*(char **)(f->esp + OFFSET_ARG), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 2) );
@@ -81,6 +84,7 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_READ:
 			check_args (f, 3);
+			//check_stack_growth_size((f->esp + OFFSET_ARG * 2), *(unsigned int *)(f->esp + OFFSET_ARG * 3), f->esp);
 			f->eax = read (
 				*(int *)(f->esp + OFFSET_ARG), 
 				*(char **)(f->esp + OFFSET_ARG * 2), 
@@ -89,6 +93,7 @@ syscall_handler (struct intr_frame *f)
 		
 		case SYS_WRITE:
 			check_args (f, 3);
+			//check_stack_growth_size((f->esp + OFFSET_ARG * 2), *(unsigned int *)(f->esp + OFFSET_ARG * 3), f->esp);
 			f->eax = write ( 
 				*(int *)(f->esp + OFFSET_ARG), 
 				*(char **)(f->esp + OFFSET_ARG * 2), 
@@ -111,6 +116,7 @@ syscall_handler (struct intr_frame *f)
 			check_args (f, 1);
 			close ( *(int *)(f->esp + OFFSET_ARG) );
 			break;
+
 		case SYS_MMAP:
 			check_args (f, 2);
 			mmap (
@@ -276,6 +282,7 @@ filesize (int fd)
 int 
 read (int fd, void *buffer, unsigned size)
 {
+
 	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
  		exit(-1);
 
@@ -490,6 +497,30 @@ check_args (struct intr_frame *f, int nr_of_args)
 {
 	int i;
 	for (i = 1; i <= nr_of_args; i++)
-		if( ! is_user_vaddr(f->esp + OFFSET_ARG * i) )
-			exit(-1);
+	{
+		if(!is_user_vaddr(f->esp + OFFSET_ARG * i)) 
+			exit (-1);
+
+		check_stack_growth((f->esp + OFFSET_ARG * i), f->esp);
+	}
+}
+
+static void
+check_stack_growth(void *vaddr, void *esp)
+{
+	struct spt_entry_t *e = spt_lookup (thread_current ()->spt, vaddr);
+
+	// pseudOS: create a new page for the stack, if there is no entry 
+	// for vaddr in the supplemental page table and if vaddr is higher 
+	// than (esp - 32) 
+	if( (e == NULL) && (vaddr >= (esp - 32)) )
+        stack_growth (vaddr);
+}
+
+static void
+check_stack_growth_size(void *buffer, unsigned size, void *esp)
+{
+	uint32_t *pg;
+	for (pg = pg_round_down (buffer); pg <= (uint32_t *) pg_round_down (buffer + size); pg += PGSIZE)
+		check_stack_growth(pg, esp);
 }
