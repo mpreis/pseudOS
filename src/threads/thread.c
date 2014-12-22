@@ -265,6 +265,8 @@ thread_create (const char *name, int priority,
 #ifdef USERPROG
   t->spt = malloc(sizeof(struct hash));
   spt_init(t->spt);
+  list_init(&t->mapped_files);
+  t->next_mapid = DEFAULT_MAPID; 
 #endif
 
   intr_set_level (old_level);
