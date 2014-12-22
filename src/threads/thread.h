@@ -5,9 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include <hash.h>
-
 #include "synch.h"
-
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -36,6 +34,9 @@ typedef int tid_t;
 /* pseudOS: Project 2 */
 #define FD_INIT 2                    /* pseudOS: The smallest possible value of a file-descriptor. */
 #define FD_ARR_DEFAULT_LENGTH 128    /* pseudOS: Default size of the file-descriptors array. */
+
+/* pseudOS: Project 3*/
+#define DEFAULT_MAPID 0              /* pseudOS: Default size of the memory mapped files array. */
 
 /* A kernel thread or user process.
 
@@ -118,6 +119,8 @@ struct thread
 
     /* pseudOS: Project 3 */
     struct hash* spt;                       /* pseudOS: Supplemental page table. */
+    struct list mapped_files;               /* pseudOS: This array holds pointers of all memory mapped files. */ 
+    unsigned next_mapid;
 #endif
 
     /* Owned by thread.c. */
@@ -132,8 +135,7 @@ struct thread
     int recent_cpu; 			       /* pseudOS: How much time recieved this thread recently. */
 
     /* pseudOS: Project 2 */
-    struct file* fds[FD_ARR_DEFAULT_LENGTH];/* pseudOS: This array holds pointers of all open files. */
-    
+    struct file* fds[FD_ARR_DEFAULT_LENGTH]; /* pseudOS: This array holds pointers of all open files. */
   };
 
 /* If false (default), use round-robin scheduler.

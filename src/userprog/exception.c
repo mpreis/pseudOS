@@ -151,24 +151,26 @@ page_fault (struct intr_frame *f)
       void *vaddr = palloc_get_page (PAL_USER);
       if(vaddr != NULL) 
       {
-        frame_table_insert (vaddr);
-        spt_insert (thread_current ()->spt, vaddr, true); // TODO: check if writeable = true is correct
+        // TODO
+        //frame_table_insert (vaddr);
+        //spt_insert (thread_current ()->spt, vaddr, true); // TODO: check if writeable = true is correct
         return;
       }
     }
     else
     {
-      if(e->swap_ptr != NULL) 
-      {
-        //TODO: SWAP
-        return;
-      }
-
-      if(e->file_ptr != NULL) 
-      {
-        //TODO: FILE
-        return;
-      }
+      // TODO
+      return;
+      // if(e->swap_ptr != NULL) 
+      // {
+      //   //TODO: SWAP
+      //   return;
+      // }
+      // if(e->file_ptr != NULL) 
+      // {
+      //   //TODO: FILE
+      //   return;
+      // }
     }
   }
 

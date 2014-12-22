@@ -8,6 +8,7 @@
 #include "devices/input.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "vm/page.h"
 #include "pagedir.h"
 #include "process.h"
 #include <stdio.h>
@@ -20,6 +21,7 @@ static struct lock syscall_lock;	/* pseudOS: Lock variable to ensure a secure ex
 
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descriptor is valid. */
+static void check_args (struct intr_frame *f, int nr_of_args);
 
 void
 syscall_init (void) 
@@ -41,103 +43,82 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		case SYS_EXIT: 
-			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
-				exit ( *(int *)(f->esp + OFFSET_ARG) );
-			else 
-				exit (-1);
+			check_args (f, 1);
+			exit ( *(int *)(f->esp + OFFSET_ARG) );
 			break;
 
 		case SYS_EXEC:
-			if( is_user_vaddr((char **)(f->esp + OFFSET_ARG)) )
-				f->eax = exec ( *(char **)(f->esp + OFFSET_ARG) );
-			else 
-				exit (-1);
+			check_args (f, 1);
+			f->eax = exec ( *(char **)(f->esp + OFFSET_ARG) );
 			break; 
 
 		case SYS_WAIT: 
-			if( is_user_vaddr((pid_t *)(f->esp + OFFSET_ARG)) )
-				f->eax = wait ( *(pid_t *)(f->esp + OFFSET_ARG) );
-			else
-				exit (-1);
+			check_args (f, 1);
+			f->eax = wait ( *(pid_t *)(f->esp + OFFSET_ARG) );
 			break;
 
 		case SYS_CREATE: 
-			if( is_user_vaddr((char **)(f->esp + OFFSET_ARG)) 
-					&& is_user_vaddr((unsigned int *)(f->esp + OFFSET_ARG * 2)) )
-				f->eax = create ( 
-					*(char **)(f->esp + OFFSET_ARG), 
-					*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
-			else
-				exit (-1);
+			check_args (f, 2);
+			f->eax = create ( 
+				*(char **)(f->esp + OFFSET_ARG), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 2) );
 			break;
 
 		case SYS_REMOVE: 
-			if( is_user_vaddr((char **)(f->esp + OFFSET_ARG)) )
-				f->eax = remove ( *(char **)(f->esp + OFFSET_ARG) );
-			else
-				exit (-1);
+			check_args (f, 1);
+			f->eax = remove ( *(char **)(f->esp + OFFSET_ARG) );
 			break;
 
 		case SYS_OPEN: 
-			if( is_user_vaddr((char **)(f->esp + OFFSET_ARG)) )
-				f->eax = open ( *(char **)(f->esp + OFFSET_ARG) );
-			else
-				exit (-1);
+			check_args (f, 1);
+			f->eax = open ( *(char **)(f->esp + OFFSET_ARG) );
 			break;
 
 		case SYS_FILESIZE: 
-			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
-				f->eax = filesize ( *(int *)(f->esp + OFFSET_ARG) );
-			else
-				exit (-1);
+			check_args (f, 1);
+			f->eax = filesize ( *(int *)(f->esp + OFFSET_ARG) );
 			break;
 
 		case SYS_READ:
-			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG))
-					&& is_user_vaddr((char *)(f->esp + OFFSET_ARG * 2))
-					&& is_user_vaddr((unsigned int *)(f->esp + OFFSET_ARG * 3)) )
-				f->eax = read (
-					*(int *)(f->esp + OFFSET_ARG), 
-					*(char **)(f->esp + (OFFSET_ARG * 2)), 
-					*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );
-			else
-				exit (-1);	
+			check_args (f, 3);
+			f->eax = read (
+				*(int *)(f->esp + OFFSET_ARG), 
+				*(char **)(f->esp + OFFSET_ARG * 2), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 3) );
 			break;
 		
 		case SYS_WRITE:
-			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG))
-					&& is_user_vaddr((char *)(f->esp + OFFSET_ARG * 2))
-					&& is_user_vaddr((unsigned int *)(f->esp + OFFSET_ARG * 3)) )
-				f->eax = write ( 
-					*(int *)(f->esp + OFFSET_ARG), 
-					*(char **)(f->esp + (OFFSET_ARG * 2)), 
-					*(unsigned int *)(f->esp + (OFFSET_ARG * 3)) );
-			else
-				exit (-1);
+			check_args (f, 3);
+			f->eax = write ( 
+				*(int *)(f->esp + OFFSET_ARG), 
+				*(char **)(f->esp + OFFSET_ARG * 2), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 3) );
 			break;
 
 		case SYS_SEEK: 
-			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG))
-					&& is_user_vaddr((unsigned int *)(f->esp + OFFSET_ARG * 2)) )
-				seek( 
-					*(int *)(f->esp + OFFSET_ARG ), 
-					*(unsigned int *)(f->esp + (OFFSET_ARG * 2)) );
-			else
-				exit (-1);
+			check_args (f, 2);
+			seek( 
+				*(int *)(f->esp + OFFSET_ARG ), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 2) );
 			break;
 
 		case SYS_TELL: 
-			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
-				f->eax = tell ( *(int *)(f->esp + OFFSET_ARG) );
-			else
-				exit (-1);
+			check_args (f, 1);
+			f->eax = tell ( *(int *)(f->esp + OFFSET_ARG) );
 			break;
 
 		case SYS_CLOSE: 
-			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
-				close ( *(int *)(f->esp + OFFSET_ARG) );
-			else
-				exit (-1);
+			check_args (f, 1);
+			close ( *(int *)(f->esp + OFFSET_ARG) );
+			break;
+		case SYS_MMAP:
+			check_args (f, 2);
+			mmap (
+				*(int *)(f->esp + OFFSET_ARG), 
+				*(void **)(f->esp + OFFSET_ARG * 2) );
+			break;
+
+		case SYS_MUNMAP:
 			break;
 
 		default:
@@ -390,13 +371,79 @@ tell (int fd)
 void 
 close (int fd)
 {
-	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL)
+	if( ! is_valid_fd (fd) || thread_current ()->fds[fd - FD_INIT] == NULL)
 		return;
 
 	lock_acquire (&syscall_lock);
 	file_close ( thread_current ()->fds[fd - FD_INIT] );
 	thread_current ()->fds[fd - FD_INIT] = NULL;
 	lock_release (&syscall_lock);
+}
+
+/* 
+ * pseudOS: 
+ 	A call to mmap may fail if 
+ 	 1. the file open as fd has a length of zero bytes. 
+ 	 2. It must fail if addr is not page-aligned or 
+ 	 3. if the range of pages mapped overlaps any existing set of mapped pages, 
+ 	 		including the stack or pages mapped at executable load time. 
+ 	 4. It must also fail if addr is 0, because some Pintos code assumes virtual page 0 is not mapped. 
+ 	 5. Finally, file descriptors 0 and 1, representing console input and output, are not mappable.
+ */
+mapid_t 
+mmap (int fd, void *addr)
+{
+	if(! is_valid_fd (fd) || fd < FD_INIT) 		/* pseudOS: 5. */
+		return MAP_FAILED;
+	
+	struct file *f = thread_current ()->fds[fd - FD_INIT];
+	if(f == NULL) 
+		return MAP_FAILED;
+	
+	off_t flen = file_length (f);
+	if(	   flen == 0							/* pseudOS: 1. */
+		|| addr == 0 							/* pseudOS: 4. */
+		|| ! is_valid_usr_ptr (addr, flen) 		/* pseudOS: 3. */
+		|| ((uint32_t)addr % PGSIZE) != 0 )		/* pseudOS: 2. */
+		return MAP_FAILED;
+	
+	struct thread *t = thread_current ();
+	
+	lock_acquire (&syscall_lock);
+	struct mapped_file_t *mfile = malloc(sizeof(struct mapped_file_t));
+	if (!mfile) return MAP_FAILED;
+	mfile->fd = fd;
+	mfile->addr = addr;
+	mfile->mapid = (mapid_t) t->next_mapid++;
+	list_push_back (&t->mapped_files, &mfile->elem);
+
+	off_t ofs = 0;
+	while(flen > 0)
+	{
+		uint32_t read_bytes = (flen > PGSIZE ) ? PGSIZE : flen ;
+		uint32_t zero_bytes = PGSIZE - read_bytes;
+
+		if( ! spt_insert (t->spt, f, ofs, (uint8_t *)addr, 
+				read_bytes, zero_bytes, true, SPT_ENTRY_TYPE_MMAP) )
+		{
+			munmap (mfile->mapid);
+			lock_release (&syscall_lock);
+			return MAP_FAILED;
+		}
+
+		addr += PGSIZE;
+ 		flen -= read_bytes;
+		ofs  += read_bytes;
+	}
+
+	lock_release (&syscall_lock);
+	return mfile->mapid;
+}
+
+void 
+munmap (mapid_t mapping UNUSED)
+{
+
 }
 
 /* 
@@ -436,4 +483,13 @@ static bool
 is_valid_fd(int fd)
 {
 	 return (0 <= fd && fd < FD_ARR_DEFAULT_LENGTH);
+}
+
+static void
+check_args (struct intr_frame *f, int nr_of_args)
+{
+	int i;
+	for (i = 1; i <= nr_of_args; i++)
+		if( ! is_user_vaddr(f->esp + OFFSET_ARG * i) )
+			exit(-1);
 }

@@ -446,21 +446,26 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
       /* Load this page. */
       if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
+      {
           palloc_free_page (kpage);
           return false; 
-        }
+      }
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* Add the page to the process's address space. */
       if (!install_page (upage, kpage, writable)) 
-        {
+      {
           palloc_free_page (kpage);
           return false; 
-        }
-
+      }
+ 
+      if (! spt_insert (thread_current ()->spt, file, ofs, 
+            upage, read_bytes, zero_bytes,  writable, SPT_ENTRY_TYPE_FILE) )
+      {
+          palloc_free_page (kpage);
+          return false; 
+      }
       frame_table_insert (upage);
-      spt_insert (thread_current ()->spt, upage, writable);
 
       /* Advance. */
       read_bytes -= page_read_bytes;
@@ -565,6 +570,7 @@ stack_growth (void *vaddr)
       if (success) 
       {
         frame_table_insert (upage);
+        //spt_insert (thread_current ()->spt, NULL, 0, upage, PGSIZE, 0, writable, SPT_ENTRY_TYPE_FILE); 
         spt_insert (thread_current ()->spt, upage, true);
       }
       else
