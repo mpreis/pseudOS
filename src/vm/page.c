@@ -41,8 +41,14 @@ spt_insert (struct hash *spt, struct file *file, off_t ofs,
 	bool writable, enum spt_entry_type type)
 {
 	lock_acquire (&spt_lock);
-	ASSERT(spt_lookup (spt, upage) == NULL);
-	
+
+	//ASSERT(spt_lookup (spt, upage) == NULL);
+	if(spt_lookup (spt, upage) != NULL)
+	{
+		lock_release (&spt_lock);
+		return NULL;
+	}
+
 	struct spt_entry_t *e = malloc(sizeof(struct spt_entry_t));
 	e->file = file;
 	e->ofs = ofs;
@@ -64,14 +70,18 @@ spt_insert (struct hash *spt, struct file *file, off_t ofs,
 	return e;
 }
 
-void
+struct spt_entry_t *
 spt_remove (struct hash *spt, void *upage)
 {
 	lock_acquire (&spt_lock);
 	struct spt_entry_t *e = spt_lookup (spt, upage);
-	ASSERT(e != NULL);
-	hash_delete (spt, &e->hashelem);
-  	lock_release (&spt_lock);
+	if(e != NULL)
+	{
+		hash_delete (spt, &e->hashelem);
+  		lock_release (&spt_lock);
+  		return e;;
+  	}
+  	return NULL;
 }
 
 /* Returns a hash value for page p. */

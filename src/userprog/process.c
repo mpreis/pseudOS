@@ -127,6 +127,12 @@ process_exit (void)
   for(i = 0; i < FD_ARR_DEFAULT_LENGTH; i++)
     close(i);
 
+  /* psuedOS: Unmappes all  memory mapped files, removes 
+     all supplemental page table entries, removes all
+     page table entries, and removes all frame table 
+     entries used by the mappings. */
+  munmap (MUNMAP_ALL);
+
   /* pseudOS: Frees all resources of the supplemental page table.
      Frees also all occupied frame table entries. */
   spt_free(cur->spt);

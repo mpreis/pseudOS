@@ -33,7 +33,7 @@ void spt_init(struct hash *spt);
 struct spt_entry_t * spt_insert (struct hash *spt, struct file *file, off_t ofs, 
 	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes,
 	bool writable, enum spt_entry_type type);
-void spt_remove (struct hash *spt, void *upage);
+struct spt_entry_t * spt_remove (struct hash *spt, void *upage);
 unsigned spt_entry_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool spt_entry_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);
 struct spt_entry_t * spt_lookup (struct hash *spt, const void *upage);

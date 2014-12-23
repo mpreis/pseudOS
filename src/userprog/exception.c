@@ -138,8 +138,11 @@ page_fault (struct intr_frame *f)
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
   struct spt_entry_t *spte = spt_lookup (thread_current ()->spt, fault_addr);
+  // printf(" --- page_fault fa: %p spte: %p \n",fault_addr, spte);
+
+
   if(spte && spt_load_page (spte))
-      return;
+    return;
 
   // TODO: SWAP, file, ...
 

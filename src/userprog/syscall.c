@@ -113,12 +113,14 @@ syscall_handler (struct intr_frame *f)
 			break;
 		case SYS_MMAP:
 			check_args (f, 2);
-			mmap (
+			f->eax = mmap (
 				*(int *)(f->esp + OFFSET_ARG), 
 				*(void **)(f->esp + OFFSET_ARG * 2) );
 			break;
 
 		case SYS_MUNMAP:
+			check_args (f, 1);
+			munmap ( *(mapid_t *)(f->esp + OFFSET_ARG) );
 			break;
 
 		default:
@@ -162,12 +164,12 @@ exec (const char *cmd_line)
  	pid_t pid = process_execute (cmd_line);
  	struct child_process *cp = thread_get_child (pid);
   
-  sema_down (&cp->init);
-	
-  lock_release (&syscall_lock);
-  if(cp->load_success) 
-  	return pid;
-  return -1;
+	sema_down (&cp->init);
+
+	lock_release (&syscall_lock);
+	if(cp->load_success) 
+		return pid;
+	return -1;
 }
 
 /*
@@ -194,9 +196,9 @@ bool
 create (const char *file, unsigned initial_size)
 {
  	if( ! is_valid_usr_ptr (file, initial_size) ) 
- 		exit(-1);
-	
-	lock_acquire (&syscall_lock);
+ 		exit (-1);
+
+ 	lock_acquire (&syscall_lock);
 	bool b = filesys_create (file, initial_size); 
 	lock_release (&syscall_lock);
 	return b;
@@ -209,7 +211,7 @@ bool
 remove (const char *file)
 {
  	if( ! is_valid_usr_ptr (file, 0) ) 
- 		exit(-1);
+ 		return false;
 
 	lock_acquire (&syscall_lock);
 	bool b = filesys_remove (file);
@@ -225,7 +227,7 @@ int
 open (const char *file)
 {
 	if( ! is_valid_usr_ptr (file, 0) ) 
- 		exit(-1);
+ 		exit (-1);
 	
  	lock_acquire (&syscall_lock);
 	struct file *f = filesys_open (file);
@@ -277,7 +279,7 @@ int
 read (int fd, void *buffer, unsigned size)
 {
 	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
- 		exit(-1);
+ 		exit (-1);
 
  	lock_acquire (&syscall_lock);
 	if(fd == STDIN_FILENO)
@@ -311,7 +313,7 @@ int
 write (int fd, const void *buffer, unsigned size)
 { 
 	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
- 		exit(-1);
+ 		exit (-1);
 
  	lock_acquire (&syscall_lock);
 	if(fd == STDOUT_FILENO)
@@ -361,7 +363,7 @@ tell (int fd)
 	lock_acquire (&syscall_lock);
 	unsigned pos = file_tell( (struct file *) thread_current ()->fds[fd - FD_INIT] ); 
 	lock_release (&syscall_lock);
-  return pos;
+  	return pos;
 }
 
 /*
@@ -444,42 +446,45 @@ mmap (int fd, void *addr)
 }
 
 void 
-munmap (mapid_t mapping UNUSED)
+munmap (mapid_t mapping)
 {
-	printf(" --- munmap\n");
-	lock_acquire (&syscall_lock);
 	struct thread *t = thread_current ();
-	struct list_elem *e;
-	for (e  = list_begin (&t->mapped_files);
-		 e != list_end (&t->mapped_files);
-		 e  = list_next (e))
+	struct list_elem *next;
+	struct list_elem *e = list_begin (&t->mapped_files);
+	while(e != list_end (&t->mapped_files))
 	{
+		next = list_next (e);
 		struct mapped_file_t *mfile = list_entry (e, struct mapped_file_t, elem);
-		if (mfile->mapid == mapping)
+		if (mapping == mfile->mapid || mapping == MUNMAP_ALL)
 		{
 			struct file *file = file_reopen (mfile->file);
-			struct list_elem *mfe;
-			for (mfe  = list_begin (&mfile->spt_entries);
-				 mfe != list_end (&mfile->spt_entries);
-				 mfe  = list_next (mfe))
+			if(!file) exit(-1);
+
+			struct list_elem *mfe_next;
+			struct list_elem *mfe = list_begin (&mfile->spt_entries);
+			while (mfe != list_end (&mfile->spt_entries))
 			{
+				mfe_next  = list_next (mfe);
 				struct spt_entry_t *spte = list_entry (mfe, struct spt_entry_t, listelem);
 				if (pagedir_is_dirty (t->pagedir, spte->upage))
 				{
 					lock_acquire (&syscall_lock);
-					file_write_at (file, spte->upage, spte->read_bytes, spte->ofs);
+					off_t written_bytes = file_write_at (file, spte->upage, spte->read_bytes, spte->ofs);
 					lock_release (&syscall_lock);
+					
+					if((off_t)spte->read_bytes != written_bytes)
+						exit(-1);
 				}
-				spt_remove (t->spt, &spte->upage);		/* remove supplemental page table entry. */
+				spt_remove (t->spt, spte->upage);		/* remove supplemental page table entry. */
 				spt_entry_free (&spte->hashelem, NULL);	/* free resources of entry. */
+				mfe = mfe_next;
 			}
 			file_close (file);
 			list_remove (&mfile->elem);
 			free (mfile);
 		}
+		e = next;
 	} /* end iteration over mapped files */
-	printf(" --- munmap end\n");
-	lock_release (&syscall_lock);
 }
 
 /* 
