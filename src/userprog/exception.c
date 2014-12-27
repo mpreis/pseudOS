@@ -150,24 +150,6 @@ page_fault (struct intr_frame *f)
         stack_growth (fault_addr);
         return;
       }
-      
-      // void *vaddr = palloc_get_page (PAL_USER);
-      // if(vaddr != NULL) 
-      // {
-      //   if (!install_page (upage, kpage, writable)) 
-      //   {
-      //       palloc_free_page (kpage);
-      //       return false; 
-      //   }
-   
-      //   if (! spt_insert (thread_current ()->spt, file, ofs, 
-      //         upage, read_bytes, zero_bytes,  writable, SPT_ENTRY_TYPE_FILE) )
-      //   {
-      //       palloc_free_page (kpage);
-      //       return false; 
-      //   }
-      //   frame_table_insert (upage);
-      // }
     }
     else if(spt_load_page (e))
     {

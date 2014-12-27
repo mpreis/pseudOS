@@ -417,6 +417,7 @@ close (int fd)
 mapid_t 
 mmap (int fd, void *addr)
 {
+	// printf (" --- --- mmap \n");
 	if(! is_valid_fd (fd) || fd < FD_INIT) 		/* pseudOS: 5. */
 		return MAP_FAILED;
 	
@@ -463,12 +464,18 @@ mmap (int fd, void *addr)
 		ofs  += read_bytes;
 	}
 	lock_release (&syscall_lock);
+	// printf (" --- --- mmap end: %d \n", mfile->mapid);
 	return mfile->mapid;
 }
 
 void 
 munmap (mapid_t mapping)
 {
+	// printf(" --- --- munmap mapping: %d \n", mapping);
+
+	if(mapping < 0)
+		return;
+
 	struct thread *t = thread_current ();
 	struct list_elem *next;
 	struct list_elem *e = list_begin (&t->mapped_files);
@@ -486,6 +493,7 @@ munmap (mapid_t mapping)
 			
 			struct list_elem *mfe_next;
 			struct list_elem *mfe = list_begin (&mfile->spt_entries);
+			// printf (" --- spt_entries - size: %d \n", list_size (&mfile->spt_entries));
 			while (mfe != list_end (&mfile->spt_entries))
 			{
 				mfe_next  = list_next (mfe);
@@ -495,13 +503,18 @@ munmap (mapid_t mapping)
 				{
 					lock_acquire (&syscall_lock);
 
-					off_t written_bytes = file_write_at (file, spte->upage, 
+					void *kpage = pagedir_get_page (t->pagedir, spte->upage);
+					off_t written_bytes = file_write_at (file, kpage, 
 					 							spte->read_bytes, spte->ofs);
 					
+					
+					// printf (" -- file_write_at file: %p, kpage: %p, upage: %p, rb: %u, ofs: %u;\n", 
+					// 	file, kpage, spte->upage, spte->read_bytes, spte->ofs);
 					lock_release (&syscall_lock);
 					
-					if(((off_t)spte->read_bytes + (off_t)spte->zero_bytes) != written_bytes)
+					if((off_t)spte->read_bytes != written_bytes)
 					{
+			 			// printf(" -1- munmap - wb: %u rb: %u \n", written_bytes, spte->read_bytes);
 			 			exit (-1);
 					}
 					
@@ -516,6 +529,8 @@ munmap (mapid_t mapping)
 		}
 		e = next;
 	} /* end iteration over mapped files */
+	// printf (" --- --- munmap end. \n");
+
 }
 
 /* 
