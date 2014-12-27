@@ -179,11 +179,8 @@ spt_load_page_file (struct spt_entry_t *spte)
 	if(spte->read_bytes > 0)
 	{
 		lock_acquire (&spt_lock);
-		
-		enum intr_level old_level = intr_enable ();
 		off_t read_bytes = file_read_at (spte->file, spte->upage, spte->read_bytes, spte->ofs);
-		intr_set_level (old_level);
-
+		
 		if((off_t)spte->read_bytes != read_bytes)
 		{
 			palloc_free_page (kpage);
