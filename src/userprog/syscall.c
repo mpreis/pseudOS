@@ -157,8 +157,9 @@ pid_t
 exec (const char *cmd_line)
 {
 	if( ! is_valid_usr_ptr (cmd_line, 0) ) 
+ 	{
  		exit(-1);
- 	
+ 	}
  	lock_acquire (&syscall_lock);
 
  	pid_t pid = process_execute (cmd_line);
@@ -196,7 +197,9 @@ bool
 create (const char *file, unsigned initial_size)
 {
  	if( ! is_valid_usr_ptr (file, initial_size) ) 
+ 	{
  		exit (-1);
+	}
 
  	lock_acquire (&syscall_lock);
 	bool b = filesys_create (file, initial_size); 
@@ -227,7 +230,9 @@ int
 open (const char *file)
 {
 	if( ! is_valid_usr_ptr (file, 0) ) 
+ 	{
  		exit (-1);
+	}
 	
  	lock_acquire (&syscall_lock);
 	struct file *f = filesys_open (file);
@@ -262,8 +267,10 @@ int
 filesize (int fd)
 {
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
-		exit(-1);
-
+	{
+ 		exit (-1);
+	}
+	
 	lock_acquire (&syscall_lock);
 	int size = file_length ( thread_current ()->fds[fd - FD_INIT] );
 	lock_release (&syscall_lock);
@@ -279,8 +286,10 @@ int
 read (int fd, void *buffer, unsigned size)
 {
 	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
+ 	{
  		exit (-1);
-
+	}
+	
  	lock_acquire (&syscall_lock);
 	if(fd == STDIN_FILENO)
 	{
@@ -313,8 +322,10 @@ int
 write (int fd, const void *buffer, unsigned size)
 { 
 	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
+ 	{
  		exit (-1);
-
+	}
+	
  	lock_acquire (&syscall_lock);
 	if(fd == STDOUT_FILENO)
 	{
@@ -342,8 +353,10 @@ void
 seek (int fd, unsigned position)
 {
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
-		exit(-1);
-
+	{
+ 		exit (-1);
+	}
+	
 	lock_acquire (&syscall_lock);
 	file_seek (
 		thread_current ()->fds[fd - FD_INIT], 
@@ -358,8 +371,10 @@ unsigned
 tell (int fd)
 {
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
-		exit(-1);
-
+	{
+ 		exit (-1);
+	}
+	
 	lock_acquire (&syscall_lock);
 	unsigned pos = file_tell( (struct file *) thread_current ()->fds[fd - FD_INIT] ); 
 	lock_release (&syscall_lock);
@@ -404,7 +419,6 @@ mmap (int fd, void *addr)
 		return MAP_FAILED;
 	
 	off_t flen = file_length (f);
-	//unsigned nr_of_pages = (flen / PGSIZE) + 1;
 	if(	   flen == 0							/* pseudOS: 1. */
 		|| addr == 0 							/* pseudOS: 4. */
 		//|| ! is_valid_usr_ptr (addr, nr_of_pages) /* pseudOS: 3. */
@@ -458,22 +472,33 @@ munmap (mapid_t mapping)
 		if (mapping == mfile->mapid || mapping == MUNMAP_ALL)
 		{
 			struct file *file = file_reopen (mfile->file);
-			if(!file) exit(-1);
-
+			if(!file)
+			{
+				exit (-1);
+			}
+			
 			struct list_elem *mfe_next;
 			struct list_elem *mfe = list_begin (&mfile->spt_entries);
 			while (mfe != list_end (&mfile->spt_entries))
 			{
 				mfe_next  = list_next (mfe);
 				struct spt_entry_t *spte = list_entry (mfe, struct spt_entry_t, listelem);
-				if (pagedir_is_dirty (t->pagedir, spte->upage))
+				if (   pagedir_is_accessed (t->pagedir, spte->upage) 
+					|| pagedir_is_dirty (t->pagedir, spte->upage))
 				{
 					lock_acquire (&syscall_lock);
-					off_t written_bytes = file_write_at (file, spte->upage, spte->read_bytes, spte->ofs);
+
+					// off_t written_bytes = file_write_at (file, spte->upage, 
+					// 	spte->read_bytes, spte->ofs);
+					off_t written_bytes = file_write (file, spte->upage, spte->ofs);
+					
 					lock_release (&syscall_lock);
 					
-					if((off_t)spte->read_bytes != written_bytes)
-						exit(-1);
+					if(((off_t)spte->read_bytes + (off_t)spte->zero_bytes) != written_bytes)
+					{
+			 			exit (-1);
+					}
+					
 				}
 				spt_remove (t->spt, spte->upage);		/* remove supplemental page table entry. */
 				spt_entry_free (&spte->hashelem, NULL);	/* free resources of entry. */
@@ -542,5 +567,5 @@ check_args (struct intr_frame *f, int nr_of_args)
 	int i;
 	for (i = 1; i <= nr_of_args; i++)
 		if( ! is_user_vaddr(f->esp + OFFSET_ARG * i) )
-			exit(-1);
+	 		exit (-1);
 }
