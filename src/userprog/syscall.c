@@ -488,9 +488,8 @@ munmap (mapid_t mapping)
 				{
 					lock_acquire (&syscall_lock);
 
-					// off_t written_bytes = file_write_at (file, spte->upage, 
-					// 	spte->read_bytes, spte->ofs);
-					off_t written_bytes = file_write (file, spte->upage, spte->ofs);
+					off_t written_bytes = file_write_at (file, spte->upage, 
+					 							spte->read_bytes, spte->ofs);
 					
 					lock_release (&syscall_lock);
 					
