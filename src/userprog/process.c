@@ -6,6 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "userprog/gdt.h"
+#include "userprog/process.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
@@ -482,28 +483,13 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool
 setup_stack (void **esp) 
 {
-  uint8_t *kpage;
-  bool success = false;
-  bool writable = true;
-      
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      uint8_t *upage = ((uint8_t *) PHYS_BASE) - PGSIZE;
-      success = install_page (upage, kpage, writable);
-      if (success) 
-      {
-        frame_table_insert (upage);
-        //spt_insert (thread_current ()->spt, NULL, 0, upage, PGSIZE, 0, writable, SPT_ENTRY_TYPE_FILE); 
-        *esp = PHYS_BASE;
-      }
-      else
-      {
-        palloc_free_page (kpage);
-      }
-    }
-    
-  return success;
+  /* pseudOS: create first stack page at initial stack address PHYS_BASE - PG_SIZE */
+  if(stack_growth (((uint8_t *) PHYS_BASE) - PGSIZE))
+  {
+    *esp = PHYS_BASE;
+    return true;
+  }
+  return false;
 }
 
 /* pseudOS: Initialize the stack with all startup information for argument passing. 
@@ -564,6 +550,38 @@ init_stack (const char *file_name, void **esp, char **argv)
   palloc_free_page(argv_ptrs);
 
   return true;
+}
+
+/* pseudOS: As long as the stack is not bigger than MAX_STACK_SIZE , 
+ * the stack grows by adding a new page of the user space to it.
+*/
+bool
+stack_growth (void *vaddr) 
+{
+  if((PHYS_BASE - pg_round_down(vaddr)) >= MAX_STACK_SIZE)
+    exit(-1);
+
+  uint8_t *kpage;
+  bool success = false;
+  bool writable = true;
+  
+  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  if (kpage != NULL) 
+    {
+      uint8_t *upage = pg_round_down(vaddr);
+      success = install_page (upage, kpage, writable);
+      if (success) 
+      {
+        frame_table_insert (upage);
+        spt_insert (thread_current ()->spt, NULL, 0, upage, PGSIZE, 0, writable, SPT_ENTRY_TYPE_SWAP); 
+      }
+      else
+      {
+        palloc_free_page (kpage);
+      }
+    }
+    
+  return success;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel

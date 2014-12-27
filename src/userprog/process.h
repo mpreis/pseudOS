@@ -7,6 +7,7 @@
 
 /* pseudOS: Project 2 */
 #define DEFAULT_EXIT_STATUS -1 /* pseudOS: The default exit status.*/
+#define MAX_STACK_SIZE 8388608 /* pseudOS: Maximum size of the stack is 8MB */
 
 struct child_process
   {
@@ -24,6 +25,7 @@ tid_t process_execute (const char *file_name);
 int process_wait (tid_t);
 void process_exit (void);
 void process_activate (void);
+bool stack_growth (void *vaddr);    /* pseudOS: Adds a page to the stack */
 
 bool install_page (void *upage, void *kpage, bool writable);
 

@@ -5,6 +5,8 @@
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
 #include "threads/thread.h"
+#include "threads/vaddr.h"
+#include "userprog/process.h"
 #include "userprog/syscall.h"
 #include "vm/frame.h"
 #include "vm/page.h"
@@ -137,12 +139,41 @@ page_fault (struct intr_frame *f)
      (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
-  struct spt_entry_t *spte = spt_lookup (thread_current ()->spt, fault_addr);
-  // printf(" --- page_fault fa: %p spte: %p \n",fault_addr, spte);
-
-
-  if(spte && spt_load_page (spte))
-    return;
+  if(is_user_vaddr(fault_addr))
+  {
+    struct spt_entry_t *e = spt_lookup (thread_current ()->spt, fault_addr);
+    if(e == NULL) 
+    {
+      //pseudOS: if a pagefault occurs between esp and (esp - 32) the stack has to grow
+      if(fault_addr >= f->esp - 32)
+      {
+        stack_growth (fault_addr);
+        return;
+      }
+      
+      // void *vaddr = palloc_get_page (PAL_USER);
+      // if(vaddr != NULL) 
+      // {
+      //   if (!install_page (upage, kpage, writable)) 
+      //   {
+      //       palloc_free_page (kpage);
+      //       return false; 
+      //   }
+   
+      //   if (! spt_insert (thread_current ()->spt, file, ofs, 
+      //         upage, read_bytes, zero_bytes,  writable, SPT_ENTRY_TYPE_FILE) )
+      //   {
+      //       palloc_free_page (kpage);
+      //       return false; 
+      //   }
+      //   frame_table_insert (upage);
+      // }
+    }
+    else if(spt_load_page (e))
+    {
+      return;
+    }
+  }
 
   // TODO: SWAP, file, ...
 
