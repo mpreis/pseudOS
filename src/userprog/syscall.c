@@ -15,6 +15,7 @@
 #include <syscall-nr.h>
 #include <list.h>
 #include <string.h>
+#include <hash.h>
 
 #define OFFSET_ARG 4							/* pseudOS: Offest of arguments on the stack. */
 static struct lock syscall_lock;	/* pseudOS: Lock variable to ensure a secure execution of a system-call. */
@@ -24,6 +25,8 @@ static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descrip
 static void check_args (struct intr_frame *f, int nr_of_args);
 static void check_stack_growth(void *vaddr, void *esp);
 static void check_stack_growth_size(void *vaddr, unsigned size, void *esp);
+static bool is_valid_mapid(mapid_t mapping);
+static bool is_valid_mapping (void *addr, off_t file_len);
 
 void
 syscall_init (void) 
@@ -36,7 +39,7 @@ void
 syscall_handler (struct intr_frame *f) 
 {
 	if(!is_valid_usr_ptr(f->esp, 0)) 
-		exit(-1);
+		exit (SYSCALL_ERROR);
 
 	switch(*(uint32_t *) (f->esp))
 	{
@@ -130,7 +133,7 @@ syscall_handler (struct intr_frame *f)
 			break;
 
 		default:
-			exit (-1);         
+			exit (SYSCALL_ERROR);         
 	}
 }
 
@@ -163,9 +166,8 @@ pid_t
 exec (const char *cmd_line)
 {
 	if( ! is_valid_usr_ptr (cmd_line, 0) ) 
- 	{
- 		exit(-1);
- 	}
+ 		exit (SYSCALL_ERROR);
+ 	
  	lock_acquire (&syscall_lock);
 
  	pid_t pid = process_execute (cmd_line);
@@ -176,7 +178,7 @@ exec (const char *cmd_line)
 	lock_release (&syscall_lock);
 	if(cp->load_success) 
 		return pid;
-	return -1;
+	return SYSCALL_ERROR;
 }
 
 /*
@@ -192,7 +194,7 @@ wait (pid_t pid)
 		sema_down (&cp->alive);
 		return cp->exit_status;
 	}
-	return -1;
+	return SYSCALL_ERROR;
 }
 
 /*
@@ -203,9 +205,7 @@ bool
 create (const char *file, unsigned initial_size)
 {
  	if( ! is_valid_usr_ptr (file, initial_size) ) 
- 	{
- 		exit (-1);
-	}
+ 		exit (SYSCALL_ERROR);
 
  	lock_acquire (&syscall_lock);
 	bool b = filesys_create (file, initial_size); 
@@ -236,9 +236,7 @@ int
 open (const char *file)
 {
 	if( ! is_valid_usr_ptr (file, 0) ) 
- 	{
- 		exit (-1);
-	}
+ 		exit (SYSCALL_ERROR);
 	
  	lock_acquire (&syscall_lock);
 	struct file *f = filesys_open (file);
@@ -254,7 +252,7 @@ open (const char *file)
 		if(i == fds_size) 
 		{
 			lock_release (&syscall_lock);
-			return -1; // fds array to small
+			return SYSCALL_ERROR; // fds array to small
 		}
 		t->fds[i] = f;
 		int fd = i + FD_INIT;
@@ -263,7 +261,7 @@ open (const char *file)
 		return fd;
 	}
 	lock_release (&syscall_lock);
-	return -1;
+	return SYSCALL_ERROR;
 }
 
 /*
@@ -273,9 +271,7 @@ int
 filesize (int fd)
 {
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
-	{
- 		exit (-1);
-	}
+		exit (SYSCALL_ERROR);
 	
 	lock_acquire (&syscall_lock);
 	int size = file_length ( thread_current ()->fds[fd - FD_INIT] );
@@ -293,9 +289,7 @@ read (int fd, void *buffer, unsigned size)
 {
 
 	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
- 	{
- 		exit (-1);
-	}
+ 		exit (SYSCALL_ERROR);
 	
  	lock_acquire (&syscall_lock);
 	if(fd == STDIN_FILENO)
@@ -317,7 +311,7 @@ read (int fd, void *buffer, unsigned size)
 		return r;
 	}
 	lock_release (&syscall_lock);
-	return -1;
+	return SYSCALL_ERROR;
 }
 
 /*
@@ -329,9 +323,7 @@ int
 write (int fd, const void *buffer, unsigned size)
 { 
 	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
- 	{
- 		exit (-1);
-	}
+ 		exit (SYSCALL_ERROR);
 	
  	lock_acquire (&syscall_lock);
 	if(fd == STDOUT_FILENO)
@@ -349,7 +341,7 @@ write (int fd, const void *buffer, unsigned size)
 		return r;
 	}
 	lock_release (&syscall_lock);
-	return -1;
+	return SYSCALL_ERROR;
 }
 
 /*
@@ -360,9 +352,7 @@ void
 seek (int fd, unsigned position)
 {
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
-	{
- 		exit (-1);
-	}
+		exit (SYSCALL_ERROR);
 	
 	lock_acquire (&syscall_lock);
 	file_seek (
@@ -378,9 +368,7 @@ unsigned
 tell (int fd)
 {
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
-	{
- 		exit (-1);
-	}
+		exit (SYSCALL_ERROR);
 	
 	lock_acquire (&syscall_lock);
 	unsigned pos = file_tell( (struct file *) thread_current ()->fds[fd - FD_INIT] ); 
@@ -417,7 +405,6 @@ close (int fd)
 mapid_t 
 mmap (int fd, void *addr)
 {
-	// printf (" --- --- mmap \n");
 	if(! is_valid_fd (fd) || fd < FD_INIT) 		/* pseudOS: 5. */
 		return MAP_FAILED;
 	
@@ -429,7 +416,7 @@ mmap (int fd, void *addr)
 	off_t flen = file_length (f);
 	if(	   flen == 0							/* pseudOS: 1. */
 		|| addr == 0 							/* pseudOS: 4. */
-		//|| ! is_valid_usr_ptr (addr, nr_of_pages) /* pseudOS: 3. */
+		|| ! is_valid_mapping (addr, flen)		/* pseudOS: 3. */
 		|| ((uint32_t)addr % PGSIZE) != 0 )		/* pseudOS: 2. */
 		return MAP_FAILED;
 	
@@ -464,19 +451,16 @@ mmap (int fd, void *addr)
 		ofs  += read_bytes;
 	}
 	lock_release (&syscall_lock);
-	// printf (" --- --- mmap end: %d \n", mfile->mapid);
 	return mfile->mapid;
 }
 
 void 
 munmap (mapid_t mapping)
 {
-	// printf(" --- --- munmap mapping: %d \n", mapping);
-
-	if(mapping < 0)
-		return;
-
 	struct thread *t = thread_current ();
+	if(! is_valid_mapid (mapping))
+		exit (SYSCALL_ERROR);
+
 	struct list_elem *next;
 	struct list_elem *e = list_begin (&t->mapped_files);
 	while(e != list_end (&t->mapped_files))
@@ -486,14 +470,10 @@ munmap (mapid_t mapping)
 		if (mapping == mfile->mapid || mapping == MUNMAP_ALL)
 		{
 			struct file *file = file_reopen (mfile->file);
-			if(!file)
-			{
-				exit (-1);
-			}
+			if(!file) exit (SYSCALL_ERROR);
 			
 			struct list_elem *mfe_next;
 			struct list_elem *mfe = list_begin (&mfile->spt_entries);
-			// printf (" --- spt_entries - size: %d \n", list_size (&mfile->spt_entries));
 			while (mfe != list_end (&mfile->spt_entries))
 			{
 				mfe_next  = list_next (mfe);
@@ -507,16 +487,10 @@ munmap (mapid_t mapping)
 					off_t written_bytes = file_write_at (file, kpage, 
 					 							spte->read_bytes, spte->ofs);
 					
-					
-					// printf (" -- file_write_at file: %p, kpage: %p, upage: %p, rb: %u, ofs: %u;\n", 
-					// 	file, kpage, spte->upage, spte->read_bytes, spte->ofs);
 					lock_release (&syscall_lock);
 					
 					if((off_t)spte->read_bytes != written_bytes)
-					{
-			 			// printf(" -1- munmap - wb: %u rb: %u \n", written_bytes, spte->read_bytes);
-			 			exit (-1);
-					}
+						exit (SYSCALL_ERROR);
 					
 				}
 				spt_remove (t->spt, spte->upage);		/* remove supplemental page table entry. */
@@ -529,8 +503,6 @@ munmap (mapid_t mapping)
 		}
 		e = next;
 	} /* end iteration over mapped files */
-	// printf (" --- --- munmap end. \n");
-
 }
 
 /* 
@@ -579,9 +551,40 @@ is_valid_usr_ptr(const void * ptr, unsigned size)
 static bool
 is_valid_fd(int fd)
 {
-	 return (0 <= fd && fd < FD_ARR_DEFAULT_LENGTH);
+	return (0 <= fd && fd < FD_ARR_DEFAULT_LENGTH);
 }
 
+/*
+ * pseudOS: Checks if the given mapid is valid.
+ */
+static bool
+is_valid_mapid(mapid_t mapping)
+{
+	return (0 <= mapping && mapping < thread_current ()->next_mapid) 
+			|| mapping == MUNMAP_ALL; 
+}
+
+/*
+ * pseudOS: Check if the given mapping overlaps with an existing one.
+ */
+static bool
+is_valid_mapping (void *addr, off_t file_len)
+{
+	uint8_t *range_begin = (uint8_t*) addr;
+	uint8_t *range_end = (uint8_t*)(addr + file_len);
+
+	uint8_t *tmp_addr;
+	for (tmp_addr = range_begin; tmp_addr < range_end; tmp_addr += PGSIZE)
+	{
+		if (spt_lookup (thread_current ()->spt, tmp_addr) != NULL)
+			return false;
+	}
+	return true;
+}
+
+/*
+ * pseudOS: Checks if the given number of arguments are valid user pointers.
+ */
 static void
 check_args (struct intr_frame *f, int nr_of_args)
 {
@@ -589,12 +592,15 @@ check_args (struct intr_frame *f, int nr_of_args)
 	for (i = 1; i <= nr_of_args; i++)
 	{
 		if(!is_user_vaddr(f->esp + OFFSET_ARG * i)) 
-			exit (-1);
+			exit (SYSCALL_ERROR);
 
 		check_stack_growth((f->esp + OFFSET_ARG * i), f->esp);
 	}
 }
 
+/*
+ * pseudOS: Checks if a stack growth is requiered and grows the stack in case.
+ */
 static void
 check_stack_growth(void *vaddr, void *esp)
 {
@@ -607,10 +613,15 @@ check_stack_growth(void *vaddr, void *esp)
         stack_growth (vaddr);
 }
 
+/*
+ * pseudOS: Checks for a given buffer if a stack growth is required.
+ */
 static void
 check_stack_growth_size(void *buffer, unsigned size, void *esp)
 {
 	uint32_t *pg;
-	for (pg = pg_round_down (buffer); pg <= (uint32_t *) pg_round_down (buffer + size); pg += PGSIZE)
+	for (pg  = pg_round_down (buffer); 
+		 pg <= (uint32_t *) pg_round_down (buffer + size); 
+		 pg += PGSIZE)
 		check_stack_growth(pg, esp);
 }

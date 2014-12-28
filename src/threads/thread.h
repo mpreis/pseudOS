@@ -120,7 +120,7 @@ struct thread
     /* pseudOS: Project 3 */
     struct hash* spt;                       /* pseudOS: Supplemental page table. */
     struct list mapped_files;               /* pseudOS: This array holds pointers of all memory mapped files. */ 
-    unsigned next_mapid;
+    int next_mapid;
 #endif
 
     /* Owned by thread.c. */
