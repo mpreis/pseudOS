@@ -484,14 +484,17 @@ munmap (mapid_t mapping)
 					lock_acquire (&syscall_lock);
 
 					void *kpage = pagedir_get_page (t->pagedir, spte->upage);
-					off_t written_bytes = file_write_at (file, kpage, 
+					if(kpage != NULL)
+					{
+						off_t written_bytes = file_write_at (file, kpage, 
 					 							spte->read_bytes, spte->ofs);
-					
+						if((off_t)spte->read_bytes != written_bytes)
+						{
+							lock_release (&syscall_lock);
+							exit (SYSCALL_ERROR);
+						}
+					}
 					lock_release (&syscall_lock);
-					
-					if((off_t)spte->read_bytes != written_bytes)
-						exit (SYSCALL_ERROR);
-					
 				}
 				spt_remove (t->spt, spte->upage);		/* remove supplemental page table entry. */
 				spt_entry_free (&spte->hashelem, NULL);	/* free resources of entry. */
