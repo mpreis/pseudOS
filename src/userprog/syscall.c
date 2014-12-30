@@ -485,13 +485,13 @@ munmap (mapid_t mapping)
 					void *kpage = pagedir_get_page (t->pagedir, spte->upage);
 					if(kpage != NULL)
 					{
-						off_t written_bytes = file_write_at (file, kpage, 
-					 							spte->read_bytes, spte->ofs);
+						off_t written_bytes = file_write_at (file, kpage, spte->read_bytes, spte->ofs);
 						if((off_t)spte->read_bytes != written_bytes)
 						{
 							lock_release (&syscall_lock);
 							exit (SYSCALL_ERROR);
 						}
+						pagedir_clear_page (t->pagedir, spte->upage);
 					}
 					lock_release (&syscall_lock);
 				}
