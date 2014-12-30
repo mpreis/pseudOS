@@ -207,15 +207,15 @@ wait (pid_t pid)
 }
 
 /*
- * pseudOS: Creates a new file called file initially initial_size bytes in size. 
+ * pseudOS: Creates a new file called FILE initially INITIAL_SIZE bytes in size. 
  * Returns true if successful, false otherwise. 
  */
 bool 
 create (const char *file, unsigned initial_size)
 {
- 	if( ! is_valid_usr_ptr (file, initial_size) ) 
+ 	if( ! is_valid_usr_ptr (file, initial_size) )
  		exit (SYSCALL_ERROR);
-
+	
  	lock_acquire (&syscall_lock);
 	bool b = filesys_create (file, initial_size); 
 	lock_release (&syscall_lock);
@@ -530,21 +530,23 @@ munmap (mapid_t mapping)
 bool
 is_valid_usr_ptr(const void * ptr, unsigned size)
 {
-	lock_acquire (&syscall_lock);
-	if(ptr == NULL || ! is_user_vaddr(ptr) || ! is_user_vaddr(ptr + size))
-	{
-		lock_release (&syscall_lock);
+	if(ptr == NULL || ! is_user_vaddr(ptr) || ! is_user_vaddr(ptr + size)) 
 		return false;
-	}
-
+	
+	lock_acquire (&syscall_lock);
 	/* Check if every page is mapped */
 	uint32_t *pg;
-	for (	pg = pg_round_down (ptr); 
-			pg <= (uint32_t *) pg_round_down (ptr + size);
-			pg += PGSIZE
+	for (pg  = pg_round_down (ptr); 
+		 pg <= (uint32_t *) pg_round_down (ptr + size);
+		 pg += PGSIZE
 		)
 	{
-		if ( ! pagedir_get_page (thread_current ()->pagedir, pg) )
+		struct spt_entry_t *spte;
+		if ( (spte = spt_lookup (thread_current ()->spt, pg)) != NULL )
+		{
+			spt_load_page (spte);
+		}
+		else 
 		{
 			lock_release (&syscall_lock);
 			return false;

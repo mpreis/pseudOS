@@ -573,7 +573,7 @@ stack_growth (void *vaddr)
       if (success) 
       {
         frame_table_insert (upage);
-        spt_insert (thread_current ()->spt, NULL, 0, upage, PGSIZE, 0, writable, SPT_ENTRY_TYPE_SWAP); 
+        spt_insert (thread_current ()->spt, NULL, 0, upage, PGSIZE, 0, writable, SPT_ENTRY_TYPE_FILE); 
       }
       else
       {
