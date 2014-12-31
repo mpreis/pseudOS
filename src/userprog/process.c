@@ -435,46 +435,47 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
   file_seek (file, ofs);
   while (read_bytes > 0 || zero_bytes > 0) 
+  {
+    /* Calculate how to fill this page.
+       We will read PAGE_READ_BYTES bytes from FILE
+       and zero the final PAGE_ZERO_BYTES bytes. */
+    size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+    size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+    /* Get a page of memory. */
+    uint8_t *kpage = palloc_get_page (PAL_USER);
+    if (kpage == NULL)
+      return false;
+
+    /* Load this page. */
+    if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
     {
-      /* Calculate how to fill this page.
-         We will read PAGE_READ_BYTES bytes from FILE
-         and zero the final PAGE_ZERO_BYTES bytes. */
-      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-      size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
-        return false;
-
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-      {
-          palloc_free_page (kpage);
-          return false; 
-      }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
-      {
-          palloc_free_page (kpage);
-          return false; 
-      }
- 
-      if (! spt_insert (thread_current ()->spt, file, ofs, 
-            upage, read_bytes, zero_bytes,  writable, SPT_ENTRY_TYPE_FILE) )
-      {
-          palloc_free_page (kpage);
-          return false; 
-      }
-      frame_table_insert (upage);
-
-      /* Advance. */
-      read_bytes -= page_read_bytes;
-      zero_bytes -= page_zero_bytes;
-      upage += PGSIZE;
+        palloc_free_page (kpage);
+        return false; 
     }
+    memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+    /* Add the page to the process's address space. */
+    if (!install_page (upage, kpage, writable)) 
+    {
+        palloc_free_page (kpage);
+        return false; 
+    }
+
+    if (! spt_insert (thread_current ()->spt, file, ofs, 
+          upage, read_bytes, zero_bytes, writable) )
+    {
+        palloc_free_page (kpage);
+        return false; 
+    }
+    frame_table_insert (upage);
+
+    /* Advance. */
+    read_bytes -= page_read_bytes;
+    zero_bytes -= page_zero_bytes;
+    upage += PGSIZE;
+  }
+
   return true;
 }
 
@@ -561,25 +562,21 @@ stack_growth (void *vaddr)
   if((PHYS_BASE - pg_round_down(vaddr)) >= MAX_STACK_SIZE)
     exit(-1);
 
-  uint8_t *kpage;
   bool success = false;
   bool writable = true;
-  
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
-    {
-      uint8_t *upage = pg_round_down(vaddr);
-      success = install_page (upage, kpage, writable);
-      if (success) 
-      {
-        frame_table_insert (upage);
-        spt_insert (thread_current ()->spt, NULL, 0, upage, PGSIZE, 0, writable, SPT_ENTRY_TYPE_SWAP); 
-      }
-      else
-      {
-        palloc_free_page (kpage);
-      }
-    }
+  uint8_t *upage = pg_round_down(vaddr);
+  frame_table_insert (upage);
+
+  uint8_t *kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  success = install_page (upage, kpage, writable);
+
+  if(success)
+    spt_insert (thread_current ()->spt, NULL, 0, upage, PGSIZE, 0, writable); 
+  else
+  {
+    palloc_free_page (kpage);
+    frame_table_remove(upage);
+  }
     
   return success;
 }

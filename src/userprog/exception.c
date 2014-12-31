@@ -129,7 +129,7 @@ static void
 page_fault (struct intr_frame *f) 
 {
   bool not_present;  /* True: not-present page, false: writing r/o page. */
-  // bool write;        /* True: access was write, false: access was read. */
+  bool write;        /* True: access was write, false: access was read. */
   // bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
   
@@ -148,28 +148,27 @@ page_fault (struct intr_frame *f)
 
   /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
-  // write = (f->error_code & PF_W) != 0;
+  write = (f->error_code & PF_W) != 0;
   // user = (f->error_code & PF_U) != 0;
 
   if(not_present && is_user_vaddr(fault_addr))
   {
     struct spt_entry_t *e = spt_lookup (thread_current ()->spt, fault_addr);
-    if(e == NULL) 
-    {
-      //pseudOS: if a pagefault occurs between esp and (esp - 32) the stack has to grow
-      if(fault_addr >= f->esp - 32)
+    if(e) 
+    { 
+      if((write && e->writable) || !write)
       {
-        stack_growth (fault_addr);
-        return;
+        if(spt_load_page (e))
+          return;
       }
     }
-    else if(spt_load_page (e))
+    else if(fault_addr >= f->esp - 32)
     {
+      //pseudOS: if a pagefault occurs between esp and (esp - 32) the stack has to grow
+      stack_growth (fault_addr);
       return;
     }
   }
-
-  // TODO: SWAP, file, ...
 
   /* Count page faults. */
   page_fault_cnt++;

@@ -7,13 +7,7 @@
 #include <hash.h>
 #include "filesys/off_t.h"
 
-enum spt_entry_type
-{
-	SPT_ENTRY_TYPE_FILE,		/* Common file. */
-	SPT_ENTRY_TYPE_MMAP,		/* Memory mapped file. */
-	SPT_ENTRY_TYPE_SWAP,		/* SWAP. */
-	SPT_ENTRY_TYPE_CTR			/* Number of tpyes. */
-};
+#define SWAP_INIT_IDX -1
 
 struct spt_entry_t 
 {
@@ -26,13 +20,12 @@ struct spt_entry_t
 	uint32_t read_bytes;
 	uint32_t zero_bytes;
 	bool writable;
-	enum spt_entry_type type;
+	int32_t swap_page_index;
 };
 
 void spt_init(struct hash *spt);
 struct spt_entry_t * spt_insert (struct hash *spt, struct file *file, off_t ofs, 
-	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes,
-	bool writable, enum spt_entry_type type);
+	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 struct spt_entry_t * spt_remove (struct hash *spt, void *upage);
 unsigned spt_entry_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool spt_entry_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);

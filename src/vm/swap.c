@@ -29,7 +29,7 @@ swap_init(void)
 		PANIC("No Swap space found!");
 
 	swap_bitmap = bitmap_create(block_size(swap_block) / sectors_per_page);
-	if(swap_bitmap != NULL)
+	if(swap_bitmap == NULL)
 		PANIC("Cannot create swap bitmap!");
 
 	lock_init(&swap_lock);

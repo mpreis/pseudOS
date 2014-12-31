@@ -435,7 +435,7 @@ mmap (int fd, void *addr)
 		uint32_t zero_bytes = PGSIZE - read_bytes;
 
 		struct spt_entry_t *spte = spt_insert (t->spt, f, ofs, (uint8_t *)addr, 
-				read_bytes, zero_bytes, true, SPT_ENTRY_TYPE_MMAP);
+				read_bytes, zero_bytes, true);
 		if(! spte)
 		{
 			munmap (mfile->mapid);
@@ -613,6 +613,8 @@ check_stack_growth(void *vaddr, void *esp)
 	// than (esp - 32) 
 	if( (e == NULL) && (vaddr >= (esp - 32)) )
         stack_growth (vaddr);
+    else if(e)
+    	spt_load_page (e);
 }
 
 /*

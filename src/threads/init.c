@@ -23,6 +23,7 @@
 #include "threads/pte.h"
 #include "threads/thread.h"
 #include "vm/frame.h" /* pseudOS */
+#include "vm/swap.h" /* pseudOS */
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "userprog/exception.h"
@@ -397,6 +398,7 @@ locate_block_devices (void)
   locate_block_device (BLOCK_SCRATCH, scratch_bdev_name);
 #ifdef VM
   locate_block_device (BLOCK_SWAP, swap_bdev_name);
+  swap_init ();         /* pseudOS */
 #endif
 }
 

@@ -2,10 +2,15 @@
  * pseudOS
  */
 #include "vm/frame.h"
+#include "vm/swap.h"
 #include "threads/loader.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
+#include "threads/palloc.h"
 #include "threads/synch.h"
+#include "threads/thread.h"
+#include "userprog/pagedir.h"
+#include <list.h>
 #include <stdlib.h>
 
 #define FRAME_FAILED -1
@@ -15,6 +20,7 @@ static struct lock ft_lock;
 static struct frame_table_entry_t *frame_table_get_entry (void *vaddr);
 static int frame_table_get_free_frame (void);
 static struct frame_table_t *frame_table;
+static int frame_table_evict_frame (void);
 
 void
 frame_table_init (void)
@@ -102,5 +108,26 @@ frame_table_get_free_frame (void)
 			return i;
 		}
 	lock_release (&ft_lock);
-	return FRAME_FAILED;
+	return frame_table_evict_frame ();
+}
+
+static int
+frame_table_evict_frame (void)
+{
+	lock_acquire (&ft_lock);
+	printf(" ---- FTEF ---- \n");
+	// pseudOS: select frame to evict
+	int evicted_frame_idx = 0;	// TODO
+	struct frame_table_entry_t *eframe = list_entry(list_pop_front(&frame_table->frames), 
+													struct frame_table_entry_t, ftelem);
+
+	// pseudOS: write frame to swap space
+	swap_evict (eframe->vaddr);
+
+	// pseudOS: free allocated resources of evicted frame
+	palloc_free_page(eframe->vaddr);
+	pagedir_clear_page(thread_current ()->pagedir, eframe->vaddr);
+
+	lock_release (&ft_lock);
+	return evicted_frame_idx;
 }

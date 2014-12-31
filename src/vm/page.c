@@ -1,9 +1,9 @@
 /*
  * pseudOS: supplemental page table
  */
-#include "vm/page.h"
-#include "vm/frame.h"
 #include "devices/timer.h"
+#include "filesys/off_t.h"
+#include "filesys/file.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
@@ -12,34 +12,27 @@
 #include "threads/interrupt.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
-#include "filesys/off_t.h"
-#include "filesys/file.h"
+#include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
 
 #include <string.h>
 
 static bool spt_load_page_swap (struct spt_entry_t *spte);
 static bool spt_load_page_file (struct spt_entry_t *spte);
 
-typedef bool (*spt_load_page_t)(struct spt_entry_t *);
-
 static struct lock spt_lock;
-static spt_load_page_t load_page[SPT_ENTRY_TYPE_CTR];
 	
 void 
 spt_init(struct hash *spt)
 {
 	lock_init (&spt_lock);
 	hash_init (spt, spt_entry_hash, spt_entry_less, NULL);
-
-	load_page[SPT_ENTRY_TYPE_FILE] = spt_load_page_file;
-	load_page[SPT_ENTRY_TYPE_MMAP] = spt_load_page_file;
-	load_page[SPT_ENTRY_TYPE_SWAP] = spt_load_page_swap;
 }
 
 struct spt_entry_t * 
-spt_insert (struct hash *spt, struct file *file, off_t ofs, 
-	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes,
-	bool writable, enum spt_entry_type type)
+spt_insert (struct hash *spt, struct file *file, off_t ofs, uint8_t *upage, 
+	uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
 	lock_acquire (&spt_lock);
 
@@ -57,7 +50,7 @@ spt_insert (struct hash *spt, struct file *file, off_t ofs,
 	e->read_bytes = read_bytes;
 	e->zero_bytes = zero_bytes;
 	e->writable = writable;
-	e->type = type;
+	e->swap_page_index = SWAP_INIT_IDX;
 	e->lru_ticks = timer_ticks();
 	
 	struct hash_elem *he = hash_insert (spt, &e->hashelem);
@@ -149,37 +142,55 @@ bool
 spt_load_page (struct spt_entry_t *spte)
 {
 	if(spte == NULL) return false;
-	return load_page[spte->type](spte);
+	bool status = false;
+
+	if(spte->swap_page_index != SWAP_INIT_IDX) 
+		status = spt_load_page_swap(spte);
+	else 
+		status = spt_load_page_file(spte);
+
+	printf("status=%d\n", status);
+	return status;
 }
 
 static bool
 spt_load_page_swap (struct spt_entry_t *spte)
-{
-	printf(" --- spt_load_page_swap %p \n", spte);
-	return false;
-}
+{	
+	frame_table_insert (spte->upage);
 
-static bool
-spt_load_page_file (struct spt_entry_t *spte)
-{
 	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
-	
+
 	if (!install_page (spte->upage, kpage, spte->writable)) 
 	{
 		palloc_free_page (kpage);
 		return false; 
 	}
-	
-	if (! frame_table_insert (spte->upage))
+
+	if(spte->read_bytes > 0)
+	{
+		swap_free (spte->swap_page_index, spte->upage);
+	}
+
+	return true;
+}
+
+static bool
+spt_load_page_file (struct spt_entry_t *spte)
+{
+	frame_table_insert (spte->upage);
+
+	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
+
+	if (!install_page (spte->upage, kpage, spte->writable)) 
 	{
 		palloc_free_page (kpage);
 		return false; 
 	}
-	
+
 	if(spte->read_bytes > 0)
 	{
 		lock_acquire (&spt_lock);
-		off_t read_bytes = file_read_at (spte->file, spte->upage, spte->read_bytes, spte->ofs);
+		off_t read_bytes = file_read_at (spte->file, kpage, spte->read_bytes, spte->ofs);
 		
 		if((off_t)spte->read_bytes != read_bytes)
 		{
