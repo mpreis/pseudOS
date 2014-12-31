@@ -41,8 +41,8 @@ init_frame_table(struct frame_table_t *ft)
 bool
 frame_table_insert (void *vaddr)
 {
-	struct frame_table_entry_t *fte = frame_table_get_entry (vaddr);
-	if(fte != NULL) return false;	// frame already exists
+	//struct frame_table_entry_t *fte = frame_table_get_entry (vaddr);
+	//if(fte != NULL) return false;	// frame already exists
 	
 	int new_frame_idx = frame_table_get_free_frame ();
 	ASSERT (new_frame_idx != FRAME_FAILED);
@@ -108,7 +108,7 @@ frame_table_get_free_frame (void)
 			return i;
 		}
 	lock_release (&ft_lock);
-	return false; //frame_table_evict_frame ();
+	return FRAME_FAILED; //frame_table_evict_frame ();
 }
 
 static int

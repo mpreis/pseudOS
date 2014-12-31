@@ -23,7 +23,10 @@ struct spt_entry_t
 	int32_t swap_page_index;
 };
 
+struct lock spt_lock;
+
 void spt_init(struct hash *spt);
+void spt_init_lock(void);
 struct spt_entry_t * spt_insert (struct hash *spt, struct file *file, off_t ofs, 
 	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 struct spt_entry_t * spt_remove (struct hash *spt, void *upage);

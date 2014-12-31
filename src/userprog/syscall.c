@@ -622,8 +622,6 @@ check_stack_growth(void *vaddr, void *esp)
 	// than (esp - 32) 
 	if( (e == NULL) && (vaddr >= (esp - 32)) )
         stack_growth (vaddr);
-    else if(e)
-    	spt_load_page (e);
 }
 
 /*

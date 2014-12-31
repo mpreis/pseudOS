@@ -20,26 +20,27 @@
 
 static bool spt_load_page_swap (struct spt_entry_t *spte);
 static bool spt_load_page_file (struct spt_entry_t *spte);
-
-static struct lock spt_lock;
 	
 void 
 spt_init(struct hash *spt)
 {
-	lock_init (&spt_lock);
 	hash_init (spt, spt_entry_hash, spt_entry_less, NULL);
+}
+	
+void 
+spt_init_lock()
+{
+	lock_init (&spt_lock);
 }
 
 struct spt_entry_t * 
 spt_insert (struct hash *spt, struct file *file, off_t ofs, uint8_t *upage, 
 	uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
-	lock_acquire (&spt_lock);
 
 	//ASSERT(spt_lookup (spt, upage) == NULL);
 	if(spt_lookup (spt, upage) != NULL)
 	{
-		lock_release (&spt_lock);
 		return NULL;
 	}
 
@@ -54,7 +55,6 @@ spt_insert (struct hash *spt, struct file *file, off_t ofs, uint8_t *upage,
 	e->lru_ticks = timer_ticks();
 	
 	struct hash_elem *he = hash_insert (spt, &e->hashelem);
-	lock_release (&spt_lock);
 
 	if(he != NULL) 
 	{
@@ -67,12 +67,10 @@ spt_insert (struct hash *spt, struct file *file, off_t ofs, uint8_t *upage,
 struct spt_entry_t *
 spt_remove (struct hash *spt, void *upage)
 {
-	lock_acquire (&spt_lock);
 	struct spt_entry_t *e = spt_lookup (spt, upage);
 	if(e != NULL)
 	{
 		hash_delete (spt, &e->hashelem);
-  		lock_release (&spt_lock);
   		return e;;
   	}
   	return NULL;
@@ -161,6 +159,7 @@ spt_load_page_swap (struct spt_entry_t *spte)
 	if (!install_page (spte->upage, kpage, spte->writable)) 
 	{
 		palloc_free_page (kpage);
+		//frame_table_remove (spte->upage);
 		return false; 
 	}
 
@@ -175,6 +174,7 @@ spt_load_page_swap (struct spt_entry_t *spte)
 static bool
 spt_load_page_file (struct spt_entry_t *spte)
 {
+	lock_acquire (&spt_lock);
 	frame_table_insert (spte->upage);
 
 	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
@@ -182,12 +182,13 @@ spt_load_page_file (struct spt_entry_t *spte)
 	if (!install_page (spte->upage, kpage, spte->writable)) 
 	{
 		palloc_free_page (kpage);
+		//frame_table_remove (spte->upage);
+		lock_release (&spt_lock);
 		return false; 
 	}
 
 	if(spte->read_bytes > 0)
 	{
-		lock_acquire (&spt_lock);
 		off_t read_bytes = file_read_at (spte->file, kpage, spte->read_bytes, spte->ofs);
 		
 		if((off_t)spte->read_bytes != read_bytes)
@@ -198,9 +199,8 @@ spt_load_page_file (struct spt_entry_t *spte)
 			return false;
 		} 
 		memset(kpage + spte->read_bytes, 0, spte->zero_bytes);
-		lock_release (&spt_lock);
-
 	}
 
+	lock_release (&spt_lock);
 	return true;
 }

@@ -23,6 +23,7 @@
 #include "threads/pte.h"
 #include "threads/thread.h"
 #include "vm/frame.h" /* pseudOS */
+#include "vm/page.h" /* pseudOS */
 #include "vm/swap.h" /* pseudOS */
 #ifdef USERPROG
 #include "userprog/process.h"
@@ -101,6 +102,7 @@ main (void)
   malloc_init ();
   paging_init ();
   frame_table_init ();  /* pseudOS */
+  spt_init_lock();      /* pseudOS */
   
   /* Segmentation. */
 #ifdef USERPROG
