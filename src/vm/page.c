@@ -148,7 +148,6 @@ spt_load_page (struct spt_entry_t *spte)
 	else 
 		status = spt_load_page_file(spte);
 
-	printf("status=%d\n", status);
 	return status;
 }
 
@@ -179,7 +178,7 @@ spt_load_page_file (struct spt_entry_t *spte)
 	frame_table_insert (spte->upage);
 
 	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
-
+	
 	if (!install_page (spte->upage, kpage, spte->writable)) 
 	{
 		palloc_free_page (kpage);
@@ -202,5 +201,6 @@ spt_load_page_file (struct spt_entry_t *spte)
 		lock_release (&spt_lock);
 
 	}
+
 	return true;
 }

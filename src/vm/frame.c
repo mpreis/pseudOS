@@ -108,14 +108,13 @@ frame_table_get_free_frame (void)
 			return i;
 		}
 	lock_release (&ft_lock);
-	return frame_table_evict_frame ();
+	return false; //frame_table_evict_frame ();
 }
 
 static int
 frame_table_evict_frame (void)
 {
 	lock_acquire (&ft_lock);
-	printf(" ---- FTEF ---- \n");
 	// pseudOS: select frame to evict
 	int evicted_frame_idx = 0;	// TODO
 	struct frame_table_entry_t *eframe = list_entry(list_pop_front(&frame_table->frames), 
