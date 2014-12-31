@@ -132,10 +132,9 @@ spt_entry_free (struct hash_elem *e, void *aux UNUSED)
 	if(pagedir_is_accessed (t->pagedir, spte->upage))
 		pagedir_set_accessed (t->pagedir, spte->upage, false);
 
-	frame_table_remove (&spte->upage);	/* release frame. */
-	// list_remove (&spte->listelem);	/* remove mapped files list entry. */
-	// free (&spte->upage);	/* free allocated page. */
-	free (spte);							/* free entry itself. */
+	frame_table_remove (&spte->upage);				/* release frame. */
+	pagedir_clear_page (t->pagedir, spte->upage);	/* remove pagedir entry. */
+	free (spte);									/* free entry itself. */
 }
 
 bool

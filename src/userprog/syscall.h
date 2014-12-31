@@ -4,7 +4,7 @@
 #include <list.h>
 #include "lib/user/syscall.h"
 
-#define MUNMAP_ALL -1
+#define MUNMAP_ALL -2	/* pseudOS: Has to be smaller than -1(!) because -1 is a ERROR case. */
 #define SYSCALL_ERROR -1
 
 void syscall_init (void);

@@ -564,6 +564,7 @@ stack_growth (void *vaddr)
 
   bool success = false;
   bool writable = true;
+
   uint8_t *upage = pg_round_down(vaddr);
   frame_table_insert (upage);
 

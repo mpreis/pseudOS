@@ -64,7 +64,10 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_CREATE: 
 			check_args (f, 2);
-			check_stack_growth_size(*(char **)(f->esp + OFFSET_ARG), *(unsigned int *)(f->esp + OFFSET_ARG * 2), f->esp);
+			check_stack_growth_size(
+				*(char **)(f->esp + OFFSET_ARG), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 2), 
+				f->esp);
 			f->eax = create ( 
 				*(char **)(f->esp + OFFSET_ARG), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 2) );
@@ -87,7 +90,10 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_READ:
 			check_args (f, 3);
-			check_stack_growth_size(*(char **)(f->esp + OFFSET_ARG * 2), *(unsigned int *)(f->esp + OFFSET_ARG * 3), f->esp);
+			check_stack_growth_size(
+				*(char **)(f->esp + OFFSET_ARG * 2), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 3), 
+				f->esp);
 			f->eax = read (
 				*(int *)(f->esp + OFFSET_ARG), 
 				*(char **)(f->esp + OFFSET_ARG * 2), 
@@ -96,7 +102,10 @@ syscall_handler (struct intr_frame *f)
 		
 		case SYS_WRITE:
 			check_args (f, 3);
-			check_stack_growth_size(*(char **)(f->esp + OFFSET_ARG * 2), *(unsigned int *)(f->esp + OFFSET_ARG * 3), f->esp);
+			check_stack_growth_size(
+				*(char **)(f->esp + OFFSET_ARG * 2), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 3), 
+				f->esp);
 			f->eax = write ( 
 				*(int *)(f->esp + OFFSET_ARG), 
 				*(char **)(f->esp + OFFSET_ARG * 2), 
@@ -198,15 +207,15 @@ wait (pid_t pid)
 }
 
 /*
- * pseudOS: Creates a new file called file initially initial_size bytes in size. 
+ * pseudOS: Creates a new file called FILE initially INITIAL_SIZE bytes in size. 
  * Returns true if successful, false otherwise. 
  */
 bool 
 create (const char *file, unsigned initial_size)
 {
- 	if( ! is_valid_usr_ptr (file, initial_size) ) 
+ 	if( ! is_valid_usr_ptr (file, initial_size) )
  		exit (SYSCALL_ERROR);
-
+	
  	lock_acquire (&syscall_lock);
 	bool b = filesys_create (file, initial_size); 
 	lock_release (&syscall_lock);
@@ -415,8 +424,8 @@ mmap (int fd, void *addr)
 	off_t flen = file_length (f);
 	if(	   flen == 0							/* pseudOS: 1. */
 		|| addr == 0 							/* pseudOS: 4. */
-		|| ! is_valid_mapping (addr, flen)		/* pseudOS: 3. */
-		|| ((uint32_t)addr % PGSIZE) != 0 )		/* pseudOS: 2. */
+		|| ((uint32_t)addr % PGSIZE) != 0		/* pseudOS: 2. */
+		|| ! is_valid_mapping (addr, flen))		/* pseudOS: 3. */
 		return MAP_FAILED;
 	
 	lock_acquire (&syscall_lock);
@@ -438,8 +447,8 @@ mmap (int fd, void *addr)
 				read_bytes, zero_bytes, true);
 		if(! spte)
 		{
-			munmap (mfile->mapid);
 			lock_release (&syscall_lock);
+			munmap (mfile->mapid);
 			return MAP_FAILED;
 		}
 
@@ -456,12 +465,11 @@ mmap (int fd, void *addr)
 void 
 munmap (mapid_t mapping)
 {
-	struct thread *t = thread_current ();
 	if(! is_valid_mapid (mapping))
 		exit (SYSCALL_ERROR);
 
-	struct list_elem *next;
-	struct list_elem *e = list_begin (&t->mapped_files);
+	struct thread *t = thread_current ();
+	struct list_elem *next, *e = list_begin (&t->mapped_files);
 	while(e != list_end (&t->mapped_files))
 	{
 		next = list_next (e);
@@ -477,8 +485,7 @@ munmap (mapid_t mapping)
 			{
 				mfe_next  = list_next (mfe);
 				struct spt_entry_t *spte = list_entry (mfe, struct spt_entry_t, listelem);
-				if (   pagedir_is_accessed (t->pagedir, spte->upage) 
-					|| pagedir_is_dirty (t->pagedir, spte->upage))
+				if (pagedir_is_dirty (t->pagedir, spte->upage))
 				{
 					lock_acquire (&syscall_lock);
 
@@ -523,21 +530,23 @@ munmap (mapid_t mapping)
 bool
 is_valid_usr_ptr(const void * ptr, unsigned size)
 {
-	lock_acquire (&syscall_lock);
-	if(ptr == NULL || ! is_user_vaddr(ptr) || ! is_user_vaddr(ptr + size))
-	{
-		lock_release (&syscall_lock);
+	if(ptr == NULL || ! is_user_vaddr(ptr) || ! is_user_vaddr(ptr + size)) 
 		return false;
-	}
-
+	
+	lock_acquire (&syscall_lock);
 	/* Check if every page is mapped */
 	uint32_t *pg;
-	for (	pg = pg_round_down (ptr); 
-			pg <= (uint32_t *) pg_round_down (ptr + size);
-			pg += PGSIZE
+	for (pg  = pg_round_down (ptr); 
+		 pg <= (uint32_t *) pg_round_down (ptr + size);
+		 pg += PGSIZE
 		)
 	{
-		if ( ! pagedir_get_page (thread_current ()->pagedir, pg) )
+		struct spt_entry_t *spte;
+		if ( (spte = spt_lookup (thread_current ()->spt, pg)) != NULL )
+		{
+			spt_load_page (spte);
+		}
+		else 
 		{
 			lock_release (&syscall_lock);
 			return false;
