@@ -1,4 +1,3 @@
-#include "userprog/process.h"
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
@@ -8,6 +7,7 @@
 #include "userprog/gdt.h"
 #include "userprog/process.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
 #include "userprog/tss.h"
 #include "filesys/directory.h"
 #include "filesys/filesys.h"
@@ -126,8 +126,10 @@ process_exit (void)
    entries used by the mappings. */
   munmap (MUNMAP_ALL);
 
+  lock_acquire (&syscall_lock);
   if(cur->executable != NULL)
-    file_close (cur->executable);  
+    file_close (cur->executable); 
+  lock_release (&syscall_lock); 
   
   /* pseudOS: close all open files */
   int i;

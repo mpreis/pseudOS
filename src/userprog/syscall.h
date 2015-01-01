@@ -9,6 +9,7 @@
 
 void syscall_init (void);
 bool is_valid_usr_ptr(const void * ptr, unsigned size);	/* pseudOS: Checks if the given pointer is a valid user-space pointer. */
+struct lock syscall_lock;	/* pseudOS: Lock variable to ensure a secure execution of a system-call. */
 
 /* pseudOS: Project 3 - memory mapped file */
 struct mapped_file_t 

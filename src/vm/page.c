@@ -12,6 +12,7 @@
 #include "threads/interrupt.h"
 #include "userprog/pagedir.h"
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "vm/swap.h"
@@ -159,7 +160,7 @@ spt_load_page_swap (struct spt_entry_t *spte)
 	if (!install_page (spte->upage, kpage, spte->writable)) 
 	{
 		palloc_free_page (kpage);
-		//frame_table_remove (spte->upage);
+		frame_table_remove (spte->upage);
 		return false; 
 	}
 
@@ -174,7 +175,7 @@ spt_load_page_swap (struct spt_entry_t *spte)
 static bool
 spt_load_page_file (struct spt_entry_t *spte)
 {
-	lock_acquire (&spt_lock);
+	lock_acquire (&syscall_lock);
 	frame_table_insert (spte->upage);
 
 	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
@@ -182,8 +183,8 @@ spt_load_page_file (struct spt_entry_t *spte)
 	if (!install_page (spte->upage, kpage, spte->writable)) 
 	{
 		palloc_free_page (kpage);
-		//frame_table_remove (spte->upage);
-		lock_release (&spt_lock);
+		frame_table_remove (spte->upage);
+		lock_release (&syscall_lock);
 		return false; 
 	}
 
@@ -195,12 +196,12 @@ spt_load_page_file (struct spt_entry_t *spte)
 		{
 			palloc_free_page (kpage);
 			frame_table_remove (spte->upage);
-			lock_release (&spt_lock);
+			lock_release (&syscall_lock);
 			return false;
 		} 
 		memset(kpage + spte->read_bytes, 0, spte->zero_bytes);
 	}
 
-	lock_release (&spt_lock);
+	lock_release (&syscall_lock);
 	return true;
 }

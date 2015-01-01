@@ -18,7 +18,7 @@
 #include <hash.h>
 
 #define OFFSET_ARG 4							/* pseudOS: Offest of arguments on the stack. */
-static struct lock syscall_lock;	/* pseudOS: Lock variable to ensure a secure execution of a system-call. */
+//static struct lock syscall_lock;	/* pseudOS: Lock variable to ensure a secure execution of a system-call. */
 
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descriptor is valid. */
@@ -363,9 +363,7 @@ seek (int fd, unsigned position)
 		exit (SYSCALL_ERROR);
 	
 	lock_acquire (&syscall_lock);
-	file_seek (
-		thread_current ()->fds[fd - FD_INIT], 
-		position );
+	file_seek (thread_current ()->fds[fd - FD_INIT], position);
 	lock_release (&syscall_lock);
 }
 
@@ -428,7 +426,7 @@ mmap (int fd, void *addr)
 		|| ! is_valid_mapping (addr, flen))		/* pseudOS: 3. */
 		return MAP_FAILED;
 	
-	lock_acquire (&syscall_lock);
+	//lock_acquire (&syscall_lock);
 	struct mapped_file_t *mfile = malloc(sizeof(struct mapped_file_t));
 	if (!mfile) return MAP_FAILED;
 	mfile->file = f;
@@ -458,7 +456,7 @@ mmap (int fd, void *addr)
  		flen -= read_bytes;
 		ofs  += read_bytes;
 	}
-	lock_release (&syscall_lock);
+	//lock_release (&syscall_lock);
 	return mfile->mapid;
 }
 
@@ -533,7 +531,7 @@ is_valid_usr_ptr(const void * ptr, unsigned size)
 	if(ptr == NULL || ! is_user_vaddr(ptr) || ! is_user_vaddr(ptr + size)) 
 		return false;
 	
-	lock_acquire (&syscall_lock);
+	//lock_acquire (&syscall_lock);
 	/* Check if every page is mapped */
 	uint32_t *pg;
 	for (pg  = pg_round_down (ptr); 
@@ -548,11 +546,11 @@ is_valid_usr_ptr(const void * ptr, unsigned size)
 		}
 		else 
 		{
-			lock_release (&syscall_lock);
+			//lock_release (&syscall_lock);
 			return false;
 		}
 	}
-	lock_release (&syscall_lock);
+	//lock_release (&syscall_lock);
 	return true;
 }
 
