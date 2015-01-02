@@ -6,6 +6,7 @@
 
 #define MUNMAP_ALL -2	/* pseudOS: Has to be smaller than -1(!) because -1 is a ERROR case. */
 #define SYSCALL_ERROR -1
+#define USER_VADDR_BOTTOM ((void *) 0x08048000)
 
 void syscall_init (void);
 bool is_valid_usr_ptr(const void * ptr, unsigned size);	/* pseudOS: Checks if the given pointer is a valid user-space pointer. */

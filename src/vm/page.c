@@ -140,8 +140,14 @@ bool
 spt_load_page (struct spt_entry_t *spte)
 {
 	if(spte == NULL) return false;
-	bool status = false;
 
+	if(pagedir_get_page (thread_current ()->pagedir, spte->upage))
+	{
+		// printf(" --------- hallo \n\n");
+		return true;
+	}	
+
+	bool status = false;
 	if(spte->swap_page_index != SWAP_INIT_IDX) 
 		status = spt_load_page_swap(spte);
 	else 

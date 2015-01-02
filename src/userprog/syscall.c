@@ -23,8 +23,8 @@
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descriptor is valid. */
 static void check_args (struct intr_frame *f, int nr_of_args);
+static void check_buffer (void *vaddr, unsigned size, void *esp);
 static void check_stack_growth(void *vaddr, void *esp);
-static void check_stack_growth_size(void *vaddr, unsigned size, void *esp);
 static bool is_valid_mapid(mapid_t mapping);
 static bool is_valid_mapping (void *addr, off_t file_len);
 
@@ -54,6 +54,7 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_EXEC:
 			check_args (f, 1);
+			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
 			f->eax = exec ( *(char **)(f->esp + OFFSET_ARG) );
 			break; 
 
@@ -64,10 +65,7 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_CREATE: 
 			check_args (f, 2);
-			check_stack_growth_size(
-				*(char **)(f->esp + OFFSET_ARG), 
-				*(unsigned int *)(f->esp + OFFSET_ARG * 2), 
-				f->esp);
+			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
 			f->eax = create ( 
 				*(char **)(f->esp + OFFSET_ARG), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 2) );
@@ -75,11 +73,13 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_REMOVE: 
 			check_args (f, 1);
+			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
 			f->eax = remove ( *(char **)(f->esp + OFFSET_ARG) );
 			break;
 
 		case SYS_OPEN: 
 			check_args (f, 1);
+			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
 			f->eax = open ( *(char **)(f->esp + OFFSET_ARG) );
 			break;
 
@@ -90,7 +90,7 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_READ:
 			check_args (f, 3);
-			check_stack_growth_size(
+			check_buffer (
 				*(char **)(f->esp + OFFSET_ARG * 2), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 3), 
 				f->esp);
@@ -102,7 +102,7 @@ syscall_handler (struct intr_frame *f)
 		
 		case SYS_WRITE:
 			check_args (f, 3);
-			check_stack_growth_size(
+			check_buffer(
 				*(char **)(f->esp + OFFSET_ARG * 2), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 3), 
 				f->esp);
@@ -174,8 +174,8 @@ exit (int status)
 pid_t 
 exec (const char *cmd_line)
 {
-	if( ! is_valid_usr_ptr (cmd_line, 0) ) 
- 		exit (SYSCALL_ERROR);
+	// if( ! is_valid_usr_ptr (cmd_line, 0) ) 
+		// exit (SYSCALL_ERROR);
  	
  	lock_acquire (&syscall_lock);
 
@@ -213,12 +213,15 @@ wait (pid_t pid)
 bool 
 create (const char *file, unsigned initial_size)
 {
- 	if( ! is_valid_usr_ptr (file, initial_size) )
- 		exit (SYSCALL_ERROR);
-	
+ 	// if( ! is_valid_usr_ptr (file, initial_size) )
+ 	// 	exit (SYSCALL_ERROR);
+	// printf(" -1- create \n");
  	lock_acquire (&syscall_lock);
+	// printf(" -2- create  %p \n", pagedir_get_page (thread_current ()->pagedir, file));
 	bool b = filesys_create (file, initial_size); 
+	// printf(" -3- create \n");
 	lock_release (&syscall_lock);
+	// printf(" -4- create \n");
 	return b;
 }
 
@@ -228,8 +231,8 @@ create (const char *file, unsigned initial_size)
 bool 
 remove (const char *file)
 {
- 	if( ! is_valid_usr_ptr (file, 0) ) 
- 		return false;
+ 	// if( ! is_valid_usr_ptr (file, 0) ) 
+ 	// 	return false;
 
 	lock_acquire (&syscall_lock);
 	bool b = filesys_remove (file);
@@ -244,8 +247,8 @@ remove (const char *file)
 int 
 open (const char *file)
 {
-	if( ! is_valid_usr_ptr (file, 0) ) 
- 		exit (SYSCALL_ERROR);
+	// if( ! is_valid_usr_ptr (file, 0) ) 
+ // 		exit (SYSCALL_ERROR);
 	
  	lock_acquire (&syscall_lock);
 	struct file *f = filesys_open (file);
@@ -296,8 +299,8 @@ filesize (int fd)
 int 
 read (int fd, void *buffer, unsigned size)
 {
-	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
- 		exit (SYSCALL_ERROR);
+	if( !is_valid_fd(fd) ) 
+		exit (SYSCALL_ERROR);
 	
  	lock_acquire (&syscall_lock);
 	if(fd == STDIN_FILENO)
@@ -330,8 +333,8 @@ read (int fd, void *buffer, unsigned size)
 int 
 write (int fd, const void *buffer, unsigned size)
 { 
-	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
- 		exit (SYSCALL_ERROR);
+	if( !is_valid_fd(fd) ) 
+		exit (SYSCALL_ERROR);
 	
  	lock_acquire (&syscall_lock);
 	if(fd == STDOUT_FILENO)
@@ -597,14 +600,9 @@ is_valid_mapping (void *addr, off_t file_len)
 static void
 check_args (struct intr_frame *f, int nr_of_args)
 {
-	int i;
+	unsigned i;
 	for (i = 1; i <= nr_of_args; i++)
-	{
-		if(!is_user_vaddr(f->esp + OFFSET_ARG * i)) 
-			exit (SYSCALL_ERROR);
-
 		check_stack_growth((f->esp + OFFSET_ARG * i), f->esp);
-	}
 }
 
 /*
@@ -613,23 +611,47 @@ check_args (struct intr_frame *f, int nr_of_args)
 static void
 check_stack_growth(void *vaddr, void *esp)
 {
+	// printf(" -0- check_stack_growth \n");
+	if(vaddr == NULL || !is_user_vaddr(vaddr) 
+		|| pg_round_down(vaddr) == NULL || !is_user_vaddr(pg_round_down(vaddr))
+		|| vaddr < USER_VADDR_BOTTOM ) 
+		exit (SYSCALL_ERROR);
+
+	// printf(" -1- check_stack_growth \n");
 	struct spt_entry_t *e = spt_lookup (thread_current ()->spt, vaddr);
 
-	// pseudOS: create a new page for the stack, if there is no entry 
-	// for vaddr in the supplemental page table and if vaddr is higher 
-	// than (esp - 32) 
-	if( (e == NULL) && (vaddr >= (esp - 32)) )
-        stack_growth (vaddr);
+	if(e)
+	{
+		// printf(" -1.1- check_stack_growth \n");
+		spt_load_page (e);
+		// printf(" -1.2- check_stack_growth \n");
+		// if(!spt_load_page (e))
+		// 	exit (SYSCALL_ERROR);	// maybe not needed
+	}
+	else if(vaddr >= (esp - 32))
+    {
+	    // pseudOS: create a new page for the stack, if there is no entry 
+		// for vaddr in the supplemental page table and if vaddr is higher 
+		// than (esp - 32) 
+		// printf(" -1.3- check_stack_growth \n");
+	    if(!stack_growth (vaddr))
+	    	exit (SYSCALL_ERROR);
+	} else 
+	{
+		exit (SYSCALL_ERROR);
+	}
+
+	// printf(" -2- check_stack_growth \n");
+
 }
 
 /*
  * pseudOS: Checks for a given buffer if a stack growth is required.
  */
 static void
-check_stack_growth_size(void *buffer, unsigned size, void *esp)
+check_buffer (void *buffer, unsigned size, void *esp)
 {
 	unsigned i;
 	for (i = 0; i < size; i++)
-		if(is_user_vaddr(buffer+i))
-			check_stack_growth(buffer+i, esp);
+		check_stack_growth(buffer+i, esp);
 }
