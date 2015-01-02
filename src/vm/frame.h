@@ -3,6 +3,7 @@
 /*
  * pseudOS
  */
+#include "vm/page.h"
 #include <list.h>
 #include <bitmap.h>
 
@@ -15,14 +16,14 @@ struct frame_table_t
 struct frame_table_entry_t
 {
 	struct list_elem ftelem;
-	void *vaddr;
 	int used_frames_idx;
+	struct thread *owner;
+	struct spt_entry_t *spte;
 };
-
 
 void frame_table_init (void);
 void init_frame_table(struct frame_table_t *ft);
-bool frame_table_insert (void *vaddr);
-void frame_table_remove (void *vaddr);
+bool frame_table_insert (struct spt_entry_t *stpe);
+void frame_table_remove (void *upage);
 
 #endif

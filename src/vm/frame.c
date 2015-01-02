@@ -17,7 +17,7 @@
 
 static struct lock ft_lock;
 
-static struct frame_table_entry_t *frame_table_get_entry (void *vaddr);
+static struct frame_table_entry_t *frame_table_get_entry (void *upage);
 static int frame_table_get_free_frame (void);
 static struct frame_table_t *frame_table;
 static int frame_table_evict_frame (void);
@@ -39,11 +39,8 @@ init_frame_table(struct frame_table_t *ft)
 }
 
 bool
-frame_table_insert (void *vaddr)
+frame_table_insert (struct spt_entry_t *spte)
 {
-	//struct frame_table_entry_t *fte = frame_table_get_entry (vaddr);
-	//if(fte != NULL) return false;	// frame already exists
-	
 	int new_frame_idx = frame_table_get_free_frame ();
 	ASSERT (new_frame_idx != FRAME_FAILED);
 	
@@ -52,7 +49,8 @@ frame_table_insert (void *vaddr)
 	bitmap_set (frame_table->used_frames, new_frame_idx , true);
 	
 	struct frame_table_entry_t *new_fte = malloc(sizeof(struct frame_table_entry_t));
-	new_fte->vaddr = vaddr;
+	new_fte->spte = spte;
+	new_fte->owner = thread_current ();
 	new_fte->used_frames_idx = new_frame_idx;
 	list_push_back (&frame_table->frames, &new_fte->ftelem);
 	
@@ -61,22 +59,23 @@ frame_table_insert (void *vaddr)
 }
 
 void
-frame_table_remove (void *vaddr)
+frame_table_remove (void *upage)
 {
-	struct frame_table_entry_t *fte = frame_table_get_entry (vaddr);
+	struct frame_table_entry_t *fte = frame_table_get_entry (upage);
 	if(fte != NULL)
 	{
 		lock_acquire (&ft_lock);
 		bitmap_set (frame_table->used_frames, fte->used_frames_idx, false);
 		list_remove (&fte->ftelem);
+		free (fte);
 		lock_release (&ft_lock);
 	}
 }
 
 static struct frame_table_entry_t *
-frame_table_get_entry (void *vaddr)
+frame_table_get_entry (void *upage)
 {
-	if(vaddr == NULL)
+	if(upage == NULL)
 		return NULL;
 
 	lock_acquire (&ft_lock);
@@ -86,7 +85,7 @@ frame_table_get_entry (void *vaddr)
 		 e = list_next (e))
 	{
 		struct frame_table_entry_t *fte = list_entry (e, struct frame_table_entry_t, ftelem);
-		if(fte->vaddr == vaddr)
+		if(fte->spte->upage == upage && fte->owner == thread_current ())
 		{
 			lock_release (&ft_lock);
 			return fte;
@@ -108,7 +107,7 @@ frame_table_get_free_frame (void)
 			return i;
 		}
 	lock_release (&ft_lock);
-	return FRAME_FAILED; //frame_table_evict_frame ();
+	return frame_table_evict_frame ();
 }
 
 static int
@@ -116,16 +115,17 @@ frame_table_evict_frame (void)
 {
 	lock_acquire (&ft_lock);
 	// pseudOS: select frame to evict
-	int evicted_frame_idx = 0;	// TODO
-	struct frame_table_entry_t *eframe = list_entry(list_pop_front(&frame_table->frames), 
+	struct frame_table_entry_t *fte = list_entry(list_pop_front(&frame_table->frames), 
 													struct frame_table_entry_t, ftelem);
 
+	int evicted_frame_idx = fte->used_frames_idx;	// TODO
+	
 	// pseudOS: write frame to swap space
-	swap_evict (eframe->vaddr);
+	swap_evict (fte->spte->upage);
 
 	// pseudOS: free allocated resources of evicted frame
-	palloc_free_page(eframe->vaddr);
-	pagedir_clear_page(thread_current ()->pagedir, eframe->vaddr);
+	palloc_free_page(fte->spte->upage);
+	pagedir_clear_page(thread_current ()->pagedir, fte->spte->upage);
 
 	lock_release (&ft_lock);
 	return evicted_frame_idx;

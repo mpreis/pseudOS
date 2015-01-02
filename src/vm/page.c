@@ -72,7 +72,7 @@ spt_remove (struct hash *spt, void *upage)
 	if(e != NULL)
 	{
 		hash_delete (spt, &e->hashelem);
-  		return e;;
+  		return e;
   	}
   	return NULL;
 }
@@ -159,7 +159,7 @@ spt_load_page (struct spt_entry_t *spte)
 static bool
 spt_load_page_swap (struct spt_entry_t *spte)
 {	
-	frame_table_insert (spte->upage);
+	frame_table_insert (spte);
 
 	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
 
@@ -182,7 +182,7 @@ static bool
 spt_load_page_file (struct spt_entry_t *spte)
 {
 	lock_acquire (&syscall_lock);
-	frame_table_insert (spte->upage);
+	frame_table_insert (spte);
 
 	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
 	
