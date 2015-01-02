@@ -38,7 +38,7 @@ struct spt_entry_t *
 spt_insert (struct hash *spt, struct file *file, off_t ofs, uint8_t *upage, 
 	uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
-
+	ASSERT ( (read_bytes + zero_bytes) == PGSIZE );
 	//ASSERT(spt_lookup (spt, upage) == NULL);
 	if(spt_lookup (spt, upage) != NULL)
 	{
@@ -142,10 +142,7 @@ spt_load_page (struct spt_entry_t *spte)
 	if(spte == NULL) return false;
 
 	if(pagedir_get_page (thread_current ()->pagedir, spte->upage))
-	{
-		// printf(" --------- hallo \n\n");
 		return true;
-	}	
 
 	bool status = false;
 	if(spte->swap_page_index != SWAP_INIT_IDX) 
@@ -160,7 +157,7 @@ static bool
 spt_load_page_swap (struct spt_entry_t *spte)
 {	
 	frame_table_insert (spte);
-
+	
 	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
 
 	if (!install_page (spte->upage, kpage, spte->writable)) 
@@ -174,6 +171,7 @@ spt_load_page_swap (struct spt_entry_t *spte)
 	{
 		swap_free (spte->swap_page_index, spte->upage);
 	}
+	spte->swap_page_index = SWAP_INIT_IDX;
 
 	return true;
 }
@@ -183,17 +181,17 @@ spt_load_page_file (struct spt_entry_t *spte)
 {
 	lock_acquire (&syscall_lock);
 	frame_table_insert (spte);
-
+	
 	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
 	
 	if (!install_page (spte->upage, kpage, spte->writable)) 
 	{
 		palloc_free_page (kpage);
+	printf(" -1- spt_load_page_file \n");
 		frame_table_remove (spte->upage);
 		lock_release (&syscall_lock);
 		return false; 
 	}
-
 	if(spte->read_bytes > 0)
 	{
 		off_t read_bytes = file_read_at (spte->file, kpage, spte->read_bytes, spte->ofs);
@@ -201,6 +199,7 @@ spt_load_page_file (struct spt_entry_t *spte)
 		if((off_t)spte->read_bytes != read_bytes)
 		{
 			palloc_free_page (kpage);
+	printf(" -2- spt_load_page_file \n");
 			frame_table_remove (spte->upage);
 			lock_release (&syscall_lock);
 			return false;
