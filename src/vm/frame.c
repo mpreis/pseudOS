@@ -97,7 +97,7 @@ frame_table_get_entry (void *upage)
 		 e = list_next (e))
 	{
 		struct frame_table_entry_t *fte = list_entry (e, struct frame_table_entry_t, ftelem);
-		if(fte->spte->upage == upage)// && fte->owner == thread_current ())
+		if(fte->spte->upage == upage)
 		{
 			lock_release (&ft_lock);
 			return fte;
@@ -136,7 +136,7 @@ frame_table_evict_frame (void)
 	
 	// pseudOS: write frame to swap space
 	// TODO: mmap
-	if(pagedir_is_dirty (t->pagedir, fte->spte->upage))
+	//if(pagedir_is_dirty (t->pagedir, fte->spte->upage))
 		fte->spte->swap_page_index = swap_evict (fte->spte->upage);
 
 	// pseudOS: free allocated resources of evicted frame

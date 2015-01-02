@@ -167,10 +167,7 @@ spt_load_page_swap (struct spt_entry_t *spte)
 		return false; 
 	}
 
-	if(spte->read_bytes > 0)
-	{
-		swap_free (spte->swap_page_index, spte->upage);
-	}
+	swap_free (spte->swap_page_index, spte->upage);
 	spte->swap_page_index = SWAP_INIT_IDX;
 
 	return true;
