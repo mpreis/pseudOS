@@ -7,23 +7,16 @@
 #include <list.h>
 #include <bitmap.h>
 
-struct frame_table_t 
-{
-	struct bitmap *used_frames;
-	struct list frames;
-};
-
 struct frame_table_entry_t
 {
 	struct list_elem listelem;
-	int used_frames_idx;
 	struct thread *owner;
 	struct spt_entry_t *spte;
 };
 
 void frame_table_init (void);
-void init_frame_table(struct frame_table_t *ft);
-bool frame_table_insert (struct spt_entry_t *stpe);
+void init_frame_table(struct list *ft);
 void frame_table_remove (void *upage);
+void * frame_table_insert (struct spt_entry_t *stpe);
 
 #endif

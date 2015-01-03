@@ -157,16 +157,8 @@ spt_load_page (struct spt_entry_t *spte)
 static bool
 spt_load_page_swap (struct spt_entry_t *spte)
 {	
-	frame_table_insert (spte);
-	
-	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
-
-	if (!install_page (spte->upage, kpage, spte->writable)) 
-	{
-		palloc_free_page (kpage);
-		frame_table_remove (spte->upage);
-		return false; 
-	}
+	if(!frame_table_insert (spte))
+		return false;
 
 	swap_free (spte->swap_page_index, spte->upage);
 	spte->swap_page_index = SWAP_INIT_IDX;
@@ -177,18 +169,10 @@ spt_load_page_swap (struct spt_entry_t *spte)
 static bool
 spt_load_page_file (struct spt_entry_t *spte)
 {
-	frame_table_insert (spte);	// in case of eviction is the syscall_lock required
+	void * kpage = frame_table_insert (spte);
+	if(!kpage) return false;
+	
 	lock_acquire (&syscall_lock);
-	
-	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
-	
-	if (!install_page (spte->upage, kpage, spte->writable)) 
-	{
-		palloc_free_page (kpage);
-		frame_table_remove (spte->upage);
-		lock_release (&syscall_lock);
-		return false; 
-	}
 	if(spte->read_bytes > 0)
 	{
 		off_t read_bytes = file_read_at (spte->file, kpage, spte->read_bytes, spte->ofs);
@@ -196,7 +180,6 @@ spt_load_page_file (struct spt_entry_t *spte)
 		if((off_t)spte->read_bytes != read_bytes)
 		{
 			palloc_free_page (kpage);
-			pagedir_clear_page (thread_current ()->pagedir, kpage);
 			frame_table_remove (spte->upage);
 			lock_release (&syscall_lock);
 			return false;
