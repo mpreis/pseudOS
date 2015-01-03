@@ -126,10 +126,12 @@ process_exit (void)
    entries used by the mappings. */
   munmap (MUNMAP_ALL);
 
-  lock_acquire (&syscall_lock);
   if(cur->executable != NULL)
+  {  
+    lock_acquire (&syscall_lock);
     file_close (cur->executable); 
-  lock_release (&syscall_lock); 
+    lock_release (&syscall_lock); 
+  }
   
   /* pseudOS: close all open files */
   int i;
@@ -261,6 +263,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
   process_activate ();
 
   /* Open executable file. */
+  lock_acquire (&syscall_lock);
   t->executable = filesys_open (file_name);
   if (t->executable == NULL) 
     {
@@ -362,6 +365,7 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
     file_close(t->executable);
     t->executable = NULL;
   }
+  lock_release (&syscall_lock);
 
   return success;
 }
@@ -445,10 +449,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
     size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
     if (! spt_insert (thread_current ()->spt, file, ofs, 
-          upage, page_read_bytes, page_zero_bytes, writable) )
+          upage, page_read_bytes, page_zero_bytes, writable, SPT_ENTRY_TYPE_SWAP) )
         return false; 
 
-    /* Advance. */
     read_bytes -= page_read_bytes;
     zero_bytes -= page_zero_bytes;
     ofs += page_read_bytes;
@@ -545,7 +548,8 @@ stack_growth (void *vaddr)
   bool writable = true;
 
   uint8_t *upage = pg_round_down(vaddr);
-  struct spt_entry_t *spte = spt_insert (thread_current ()->spt, NULL, 0, upage, PGSIZE, 0, writable); 
+  struct spt_entry_t *spte = spt_insert (thread_current ()->spt, NULL, 0, upage, 
+                                          PGSIZE, 0, writable, SPT_ENTRY_TYPE_SWAP); 
   frame_table_insert (spte);
   
   uint8_t *kpage = palloc_get_page (PAL_USER | PAL_ZERO);
@@ -555,7 +559,6 @@ stack_growth (void *vaddr)
   {
     spt_remove (thread_current ()->spt, upage);
     palloc_free_page (kpage);
-    printf(" --- stack_growth \n");
     frame_table_remove(upage);
   }
     

@@ -15,7 +15,7 @@ struct frame_table_t
 
 struct frame_table_entry_t
 {
-	struct list_elem ftelem;
+	struct list_elem listelem;
 	int used_frames_idx;
 	struct thread *owner;
 	struct spt_entry_t *spte;

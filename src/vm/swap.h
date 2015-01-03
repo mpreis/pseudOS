@@ -11,7 +11,7 @@
 
 
 void swap_init(void);
-size_t swap_evict (void *upage);
-void swap_free (block_sector_t sector, void *upage);
+int32_t swap_evict (void *upage);
+void swap_free (int32_t sector, void *upage);
 
 #endif

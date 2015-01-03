@@ -36,7 +36,7 @@ spt_init_lock()
 
 struct spt_entry_t * 
 spt_insert (struct hash *spt, struct file *file, off_t ofs, uint8_t *upage, 
-	uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+	uint32_t read_bytes, uint32_t zero_bytes, bool writable, enum spt_entry_type_t type)
 {
 	ASSERT ( (read_bytes + zero_bytes) == PGSIZE );
 	//ASSERT(spt_lookup (spt, upage) == NULL);
@@ -52,6 +52,7 @@ spt_insert (struct hash *spt, struct file *file, off_t ofs, uint8_t *upage,
 	e->read_bytes = read_bytes;
 	e->zero_bytes = zero_bytes;
 	e->writable = writable;
+	e->type = type;
 	e->swap_page_index = SWAP_INIT_IDX;
 	e->lru_ticks = timer_ticks();
 	
@@ -176,15 +177,14 @@ spt_load_page_swap (struct spt_entry_t *spte)
 static bool
 spt_load_page_file (struct spt_entry_t *spte)
 {
+	frame_table_insert (spte);	// in case of eviction is the syscall_lock required
 	lock_acquire (&syscall_lock);
-	frame_table_insert (spte);
 	
 	void *kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
 	
 	if (!install_page (spte->upage, kpage, spte->writable)) 
 	{
 		palloc_free_page (kpage);
-	printf(" -1- spt_load_page_file \n");
 		frame_table_remove (spte->upage);
 		lock_release (&syscall_lock);
 		return false; 
@@ -196,7 +196,7 @@ spt_load_page_file (struct spt_entry_t *spte)
 		if((off_t)spte->read_bytes != read_bytes)
 		{
 			palloc_free_page (kpage);
-	printf(" -2- spt_load_page_file \n");
+			pagedir_clear_page (thread_current ()->pagedir, kpage);
 			frame_table_remove (spte->upage);
 			lock_release (&syscall_lock);
 			return false;

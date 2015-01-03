@@ -36,7 +36,7 @@ swap_init(void)
 }
 
 
-size_t
+int32_t
 swap_evict (void *upage)
 {
 	lock_acquire(&swap_lock);
@@ -52,11 +52,11 @@ swap_evict (void *upage)
 		block_write (swap_block, sector, buffer);
 
 	lock_release(&swap_lock);
-	return idx;
+	return (int32_t)idx;
 }
 
 void
-swap_free (size_t idx, void *upage)
+swap_free (int32_t idx, void *upage)
 {
 	lock_acquire(&swap_lock);
 	if(bitmap_test (swap_bitmap, idx) != SWAP_USED)

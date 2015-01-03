@@ -1,8 +1,8 @@
 /*
  * pseudOS
  */
-#include "vm/frame.h"
-#include "vm/swap.h"
+#include "filesys/file.h"
+#include "filesys/off_t.h"
 #include "threads/loader.h"
 #include "threads/vaddr.h"
 #include "threads/malloc.h"
@@ -10,8 +10,12 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "userprog/pagedir.h"
+#include "userprog/syscall.h"
+#include "vm/frame.h"
+#include "vm/swap.h"
 #include <list.h>
 #include <stdlib.h>
+
 
 #define FRAME_FAILED -1
 #define FRAME_TABLE_SIZE 300 // TODO
@@ -58,7 +62,7 @@ frame_table_insert (struct spt_entry_t *spte)
 	new_fte->spte = spte;
 	new_fte->owner = thread_current ();
 	new_fte->used_frames_idx = new_frame_idx;
-	list_push_back (&frame_table->frames, &new_fte->ftelem);
+	list_push_back (&frame_table->frames, &new_fte->listelem);
 	lock_release (&ft_lock);
 	return true;
 }
@@ -74,7 +78,7 @@ frame_table_remove (void *upage)
 	{
 		lock_acquire (&ft_lock);
 		bitmap_set (frame_table->used_frames, fte->used_frames_idx, FRAME_FREE);
-		list_remove (&fte->ftelem);
+		list_remove (&fte->listelem);
 		free (fte);
 		lock_release (&ft_lock);
 	} 
@@ -96,7 +100,7 @@ frame_table_get_entry (void *upage)
 		 e != list_end (&frame_table->frames); 
 		 e = list_next (e))
 	{
-		struct frame_table_entry_t *fte = list_entry (e, struct frame_table_entry_t, ftelem);
+		struct frame_table_entry_t *fte = list_entry (e, struct frame_table_entry_t, listelem);
 		if(fte->spte->upage == upage)
 		{
 			lock_release (&ft_lock);
@@ -124,26 +128,41 @@ frame_table_get_free_frame (void)
 
 static int
 frame_table_evict_frame (void)
-{
+{	
 	lock_acquire (&ft_lock);
-	struct thread *t = thread_current ();
-
-	// pseudOS: select frame to evict
 	struct frame_table_entry_t *fte = list_entry(list_begin(&frame_table->frames), 
-													struct frame_table_entry_t, ftelem);
+												 struct frame_table_entry_t, listelem);
 
 	int evicted_frame_idx = fte->used_frames_idx;	// TODO
+	void * kpage = pagedir_get_page (fte->owner->pagedir, fte->spte->upage);
 	
-	// pseudOS: write frame to swap space
-	// TODO: mmap
-	//if(pagedir_is_dirty (t->pagedir, fte->spte->upage))
-		fte->spte->swap_page_index = swap_evict (fte->spte->upage);
+	if(fte->spte->type == SPT_ENTRY_TYPE_SWAP)
+	{
+		if(!pagedir_is_dirty (fte->owner->pagedir, fte->spte->upage))
+		{
+			printf(" --- not dirty \n");
+		}
+		fte->spte->swap_page_index = (pagedir_is_dirty (fte->owner->pagedir, fte->spte->upage))
+			? swap_evict (fte->spte->upage)
+			: SWAP_INIT_IDX;
+	} 
+	else if (fte->spte->type == SPT_ENTRY_TYPE_MMAP)
+	{
+		fte->spte->swap_page_index = SWAP_INIT_IDX;
+		lock_acquire (&syscall_lock);
+		off_t written_bytes = file_write_at (fte->spte->file, kpage, 
+											 fte->spte->read_bytes, fte->spte->ofs);
+		lock_release (&syscall_lock);
+		if((off_t)fte->spte->read_bytes != written_bytes)
+		{
+			PANIC ("Cannot write all bytes (%d/%d)", written_bytes, fte->spte->read_bytes);
+		}
+	}
 
-	// pseudOS: free allocated resources of evicted frame
-	void * kpage = pagedir_get_page (t->pagedir, fte->spte->upage);
+	pagedir_set_accessed (fte->owner->pagedir, fte->spte->upage, false);
+	pagedir_clear_page (fte->owner->pagedir, fte->spte->upage);
 	palloc_free_page (kpage);
-	pagedir_clear_page (t->pagedir, fte->spte->upage);
-	
+
 	lock_release (&ft_lock);
 	frame_table_remove (fte->spte->upage);
 	return evicted_frame_idx;

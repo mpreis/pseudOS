@@ -9,6 +9,13 @@
 
 #define SWAP_INIT_IDX -1
 
+enum spt_entry_type_t
+{
+	SPT_ENTRY_TYPE_MMAP,
+	SPT_ENTRY_TYPE_SWAP,
+	SPT_ENTRY_TYPE_CNTR
+};
+
 struct spt_entry_t 
 {
 	struct hash_elem hashelem;
@@ -21,6 +28,7 @@ struct spt_entry_t
 	uint32_t zero_bytes;
 	bool writable;
 	int32_t swap_page_index;
+	enum spt_entry_type_t type;
 };
 
 struct lock spt_lock;
@@ -28,7 +36,7 @@ struct lock spt_lock;
 void spt_init(struct hash *spt);
 void spt_init_lock(void);
 struct spt_entry_t * spt_insert (struct hash *spt, struct file *file, off_t ofs, 
-	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable, enum spt_entry_type_t type);
 struct spt_entry_t * spt_remove (struct hash *spt, void *upage);
 unsigned spt_entry_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool spt_entry_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);

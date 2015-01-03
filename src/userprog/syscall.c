@@ -22,7 +22,7 @@
 
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descriptor is valid. */
-static void check_args (struct intr_frame *f, int nr_of_args);
+static void check_args (struct intr_frame *f, unsigned nr_of_args);
 static void check_buffer (void *vaddr, unsigned size, void *esp);
 static void check_stack_growth(void *vaddr, void *esp);
 static bool is_valid_mapid(mapid_t mapping);
@@ -174,17 +174,13 @@ exit (int status)
 pid_t 
 exec (const char *cmd_line)
 {
-	// if( ! is_valid_usr_ptr (cmd_line, 0) ) 
-		// exit (SYSCALL_ERROR);
- 	
- 	lock_acquire (&syscall_lock);
-
+ 	// lock_acquire (&syscall_lock);
  	pid_t pid = process_execute (cmd_line);
  	struct child_process *cp = thread_get_child (pid);
   
 	sema_down (&cp->init);
 
-	lock_release (&syscall_lock);
+	// lock_release (&syscall_lock);
 	if(cp->load_success) 
 		return pid;
 	return SYSCALL_ERROR;
@@ -213,15 +209,9 @@ wait (pid_t pid)
 bool 
 create (const char *file, unsigned initial_size)
 {
- 	// if( ! is_valid_usr_ptr (file, initial_size) )
- 	// 	exit (SYSCALL_ERROR);
-	// printf(" -1- create \n");
  	lock_acquire (&syscall_lock);
-	// printf(" -2- create  %p \n", pagedir_get_page (thread_current ()->pagedir, file));
 	bool b = filesys_create (file, initial_size); 
-	// printf(" -3- create \n");
 	lock_release (&syscall_lock);
-	// printf(" -4- create \n");
 	return b;
 }
 
@@ -231,9 +221,6 @@ create (const char *file, unsigned initial_size)
 bool 
 remove (const char *file)
 {
- 	// if( ! is_valid_usr_ptr (file, 0) ) 
- 	// 	return false;
-
 	lock_acquire (&syscall_lock);
 	bool b = filesys_remove (file);
 	lock_release (&syscall_lock);
@@ -247,9 +234,6 @@ remove (const char *file)
 int 
 open (const char *file)
 {
-	// if( ! is_valid_usr_ptr (file, 0) ) 
- // 		exit (SYSCALL_ERROR);
-	
  	lock_acquire (&syscall_lock);
 	struct file *f = filesys_open (file);
 	if(f)
@@ -429,7 +413,6 @@ mmap (int fd, void *addr)
 		|| ! is_valid_mapping (addr, flen))		/* pseudOS: 3. */
 		return MAP_FAILED;
 	
-	//lock_acquire (&syscall_lock);
 	struct mapped_file_t *mfile = malloc(sizeof(struct mapped_file_t));
 	if (!mfile) return MAP_FAILED;
 	mfile->file = f;
@@ -445,10 +428,9 @@ mmap (int fd, void *addr)
 		uint32_t zero_bytes = PGSIZE - read_bytes;
 
 		struct spt_entry_t *spte = spt_insert (t->spt, f, ofs, (uint8_t *)addr, 
-				read_bytes, zero_bytes, true);
+				read_bytes, zero_bytes, true, SPT_ENTRY_TYPE_MMAP);
 		if(! spte)
 		{
-			lock_release (&syscall_lock);
 			munmap (mfile->mapid);
 			return MAP_FAILED;
 		}
@@ -459,7 +441,6 @@ mmap (int fd, void *addr)
  		flen -= read_bytes;
 		ofs  += read_bytes;
 	}
-	//lock_release (&syscall_lock);
 	return mfile->mapid;
 }
 
@@ -507,7 +488,9 @@ munmap (mapid_t mapping)
 				spt_entry_free (&spte->hashelem, NULL);	/* free resources of entry. */
 				mfe = mfe_next;
 			}
+			lock_acquire (&syscall_lock);
 			file_close (file);
+			lock_release (&syscall_lock);
 			list_remove (&mfile->elem);
 			free (mfile);
 		}
@@ -534,7 +517,6 @@ is_valid_usr_ptr(const void * ptr, unsigned size)
 	if(ptr == NULL || ! is_user_vaddr(ptr) || ! is_user_vaddr(ptr + size)) 
 		return false;
 	
-	//lock_acquire (&syscall_lock);
 	/* Check if every page is mapped */
 	uint32_t *pg;
 	for (pg  = pg_round_down (ptr); 
@@ -549,11 +531,9 @@ is_valid_usr_ptr(const void * ptr, unsigned size)
 		}
 		else 
 		{
-			//lock_release (&syscall_lock);
 			return false;
 		}
 	}
-	//lock_release (&syscall_lock);
 	return true;
 }
 
@@ -598,7 +578,7 @@ is_valid_mapping (void *addr, off_t file_len)
  * pseudOS: Checks if the given number of arguments are valid user pointers.
  */
 static void
-check_args (struct intr_frame *f, int nr_of_args)
+check_args (struct intr_frame *f, unsigned nr_of_args)
 {
 	unsigned i;
 	for (i = 1; i <= nr_of_args; i++)
@@ -617,14 +597,11 @@ check_stack_growth(void *vaddr, void *esp)
 		|| vaddr < USER_VADDR_BOTTOM ) 
 		exit (SYSCALL_ERROR);
 
-	// printf(" -1- check_stack_growth \n");
 	struct spt_entry_t *e = spt_lookup (thread_current ()->spt, vaddr);
 
 	if(e)
 	{
-		// printf(" -1.1- check_stack_growth \n");
 		spt_load_page (e);
-		// printf(" -1.2- check_stack_growth \n");
 		// if(!spt_load_page (e))
 		// 	exit (SYSCALL_ERROR);	// maybe not needed
 	}
@@ -633,16 +610,10 @@ check_stack_growth(void *vaddr, void *esp)
 	    // pseudOS: create a new page for the stack, if there is no entry 
 		// for vaddr in the supplemental page table and if vaddr is higher 
 		// than (esp - 32) 
-		// printf(" -1.3- check_stack_growth \n");
 	    if(!stack_growth (vaddr))
 	    	exit (SYSCALL_ERROR);
 	} else 
-	{
 		exit (SYSCALL_ERROR);
-	}
-
-	// printf(" -2- check_stack_growth \n");
-
 }
 
 /*
