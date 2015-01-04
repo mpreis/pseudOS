@@ -550,12 +550,17 @@ stack_growth (void *vaddr)
   uint8_t *upage = pg_round_down(vaddr);
   struct spt_entry_t *spte = spt_insert (thread_current ()->spt, NULL, 0, upage, 
                                           PGSIZE, 0, writable, SPT_ENTRY_TYPE_SWAP); 
- 
+  spte->pinned = true;
   success = frame_table_insert (spte);
   
   if(!success)
   {
     spt_remove (thread_current ()->spt, upage);
+  }
+    
+  if(intr_context())
+  {
+    spte->pinned = false;
   }
     
   return success;

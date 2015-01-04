@@ -23,7 +23,7 @@ static struct lock ft_lock;
 static struct list frame_table;
 
 static struct frame_table_entry_t *frame_table_get_entry (void *upage);
-static void frame_table_evict_frame (void);
+static void * frame_table_evict_frame (void);
 
 void
 frame_table_init (void)
@@ -47,12 +47,12 @@ frame_table_insert (struct spt_entry_t *spte)
 
 	lock_acquire (&ft_lock);
 	
-	void * kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
+	void * kpage = palloc_get_page ( PAL_USER | PAL_ZERO );
 
 	if(!kpage)
 	{
 		frame_table_evict_frame ();
-		kpage = palloc_get_page ( (spte->read_bytes > 0) ? PAL_USER : PAL_ZERO );
+		kpage = palloc_get_page ( PAL_USER | PAL_ZERO );
 		if(!kpage)
 		{	
 			PANIC ("Unable to palloc page!");
@@ -65,7 +65,6 @@ frame_table_insert (struct spt_entry_t *spte)
 		lock_release (&ft_lock);
 		return NULL;
 	}
-	
 	
 	struct frame_table_entry_t *new_fte = malloc(sizeof(struct frame_table_entry_t));
 	new_fte->spte = spte;
@@ -120,24 +119,30 @@ frame_table_get_entry (void *upage)
 }
 
 
-static void
+static void *
 frame_table_evict_frame (void)
 {	
 	struct list_elem *e = list_begin(&frame_table);
 	struct frame_table_entry_t *fte = NULL;
 	while(fte == NULL)
-	{
+	{	
 		struct frame_table_entry_t *tmp_fte = list_entry(e, struct frame_table_entry_t, listelem);
-		if( pagedir_is_accessed (fte->owner->pagedir, fte->spte->upage) )
+		if(!tmp_fte->spte->pinned)
 		{
-			pagedir_set_accessed (fte->owner->pagedir, fte->spte->upage, false);	
+			if( pagedir_is_accessed (tmp_fte->owner->pagedir, tmp_fte->spte->upage) )
+			{
+				pagedir_set_accessed (tmp_fte->owner->pagedir, tmp_fte->spte->upage, false);	
+			}
+			else
+			{
+				fte = tmp_fte;
+			}
 		}
-		else
-		{
-			fte = tmp_fte;
-		}
-	}	
 
+		e = list_next(e);
+		if(e == list_end(&frame_table))
+			e = list_begin(&frame_table);
+	}	
 	void *kpage = pagedir_get_page (fte->owner->pagedir, fte->spte->upage);
 	if(fte->spte->type == SPT_ENTRY_TYPE_SWAP)
 	{
@@ -168,4 +173,6 @@ frame_table_evict_frame (void)
 	list_remove (&fte->listelem);
 	palloc_free_page (kpage);
 	free (fte);
+
+	return kpage;
 }

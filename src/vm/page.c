@@ -145,6 +145,7 @@ spt_load_page (struct spt_entry_t *spte)
 	if(pagedir_get_page (thread_current ()->pagedir, spte->upage))
 		return true;
 
+	spte->pinned = true;
 	bool status = false;
 	if(spte->swap_page_index != SWAP_INIT_IDX) 
 		status = spt_load_page_swap(spte);
@@ -162,6 +163,7 @@ spt_load_page_swap (struct spt_entry_t *spte)
 
 	swap_free (spte->swap_page_index, spte->upage);
 	spte->swap_page_index = SWAP_INIT_IDX;
+	spte->pinned = false;
 
 	return true;
 }
@@ -187,6 +189,7 @@ spt_load_page_file (struct spt_entry_t *spte)
 		memset(kpage + spte->read_bytes, 0, spte->zero_bytes);
 	}
 
+	spte->pinned = false;
 	lock_release (&syscall_lock);
 	return true;
 }

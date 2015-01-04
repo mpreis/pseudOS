@@ -467,6 +467,7 @@ munmap (mapid_t mapping)
 			{
 				mfe_next  = list_next (mfe);
 				struct spt_entry_t *spte = list_entry (mfe, struct spt_entry_t, listelem);
+				spte->pinned = true;
 				if (pagedir_is_dirty (t->pagedir, spte->upage))
 				{
 					lock_acquire (&syscall_lock);

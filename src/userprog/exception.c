@@ -159,7 +159,10 @@ page_fault (struct intr_frame *f)
       if((write && e->writable) || !write)
       {
         if(spt_load_page (e))
+        {
+          e->pinned = false;
           return;
+        }
       }
     }
     else if(fault_addr >= f->esp - 32)

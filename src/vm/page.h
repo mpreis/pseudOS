@@ -27,6 +27,7 @@ struct spt_entry_t
 	uint32_t read_bytes;
 	uint32_t zero_bytes;
 	bool writable;
+	bool pinned;
 	int32_t swap_page_index;
 	enum spt_entry_type_t type;
 };
