@@ -143,6 +143,7 @@ frame_table_evict_frame (void)
 		if(e == list_end(&frame_table))
 			e = list_begin(&frame_table);
 	}	
+	
 	void *kpage = pagedir_get_page (fte->owner->pagedir, fte->spte->upage);
 	if(fte->spte->type == SPT_ENTRY_TYPE_SWAP)
 	{

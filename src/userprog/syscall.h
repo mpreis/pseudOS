@@ -16,7 +16,7 @@ struct lock syscall_lock;	/* pseudOS: Lock variable to ensure a secure execution
 struct mapped_file_t 
 {
   struct list_elem elem;
-  struct file *file;
+  int fd;
   int mapid;
   void *addr;
   struct list spt_entries;

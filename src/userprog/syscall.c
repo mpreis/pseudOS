@@ -27,6 +27,7 @@ static void check_buffer (void *vaddr, unsigned size, void *esp);
 static void check_stack_growth(void *vaddr, void *esp);
 static bool is_valid_mapid(mapid_t mapping);
 static bool is_valid_mapping (void *addr, off_t file_len);
+static bool is_mapped_file (int fd);
 
 void
 syscall_init (void) 
@@ -376,7 +377,8 @@ tell (int fd)
 void 
 close (int fd)
 {
-	if( ! is_valid_fd (fd) || thread_current ()->fds[fd - FD_INIT] == NULL)
+	if( ! is_valid_fd (fd) || is_mapped_file (fd)
+		||  thread_current ()->fds[fd - FD_INIT] == NULL)
 		return;
 
 	lock_acquire (&syscall_lock);
@@ -415,7 +417,7 @@ mmap (int fd, void *addr)
 	
 	struct mapped_file_t *mfile = malloc(sizeof(struct mapped_file_t));
 	if (!mfile) return MAP_FAILED;
-	mfile->file = f;
+	mfile->fd = fd;
 	mfile->addr = addr;
 	mfile->mapid = (mapid_t) t->next_mapid++;
 	list_init (&mfile->spt_entries);
@@ -458,9 +460,7 @@ munmap (mapid_t mapping)
 		struct mapped_file_t *mfile = list_entry (e, struct mapped_file_t, elem);
 		if (mapping == mfile->mapid || mapping == MUNMAP_ALL)
 		{
-			struct file *file = file_reopen (mfile->file);
-			if(!file) exit (SYSCALL_ERROR);
-			
+			struct file *file = t->fds[mfile->fd - FD_INIT];
 			struct list_elem *mfe_next;
 			struct list_elem *mfe = list_begin (&mfile->spt_entries);
 			while (mfe != list_end (&mfile->spt_entries))
@@ -468,30 +468,21 @@ munmap (mapid_t mapping)
 				mfe_next  = list_next (mfe);
 				struct spt_entry_t *spte = list_entry (mfe, struct spt_entry_t, listelem);
 				spte->pinned = true;
-				if (pagedir_is_dirty (t->pagedir, spte->upage))
+				void *kpage = pagedir_get_page (t->pagedir, spte->upage);
+
+				if (kpage && file && pagedir_is_dirty (t->pagedir, spte->upage))
 				{
 					lock_acquire (&syscall_lock);
-
-					void *kpage = pagedir_get_page (t->pagedir, spte->upage);
-					if(kpage != NULL)
-					{
-						off_t written_bytes = file_write_at (file, kpage, spte->read_bytes, spte->ofs);
-						if((off_t)spte->read_bytes != written_bytes)
-						{
-							lock_release (&syscall_lock);
-							exit (SYSCALL_ERROR);
-						}
-						pagedir_clear_page (t->pagedir, spte->upage);
-					}
+					off_t written_bytes = file_write_at (file, kpage, spte->read_bytes, spte->ofs);
 					lock_release (&syscall_lock);
+					if((off_t)spte->read_bytes != written_bytes)
+						exit (SYSCALL_ERROR);
 				}
 				spt_remove (t->spt, spte->upage);		/* remove supplemental page table entry. */
 				spt_entry_free (&spte->hashelem, NULL);	/* free resources of entry. */
 				mfe = mfe_next;
 			}
-			lock_acquire (&syscall_lock);
-			file_close (file);
-			lock_release (&syscall_lock);
+			close (mfile->fd);
 			list_remove (&mfile->elem);
 			free (mfile);
 		}
@@ -626,4 +617,20 @@ check_buffer (void *buffer, unsigned size, void *esp)
 	unsigned i;
 	for (i = 0; i < size; i++)
 		check_stack_growth(buffer+i, esp);
+}
+
+static bool
+is_mapped_file (int fd)
+{
+	struct thread *t = thread_current ();
+	struct list_elem *e;
+	for (e  = list_begin (&t->mapped_files);
+		 e != list_end (&t->mapped_files);
+		 e  = list_next (e))
+	{
+		struct mapped_file_t *mfile = list_entry (e, struct mapped_file_t, elem);
+		if(mfile->fd == fd)
+			return true;
+	}
+	return false;
 }
