@@ -130,15 +130,10 @@ frame_table_evict_frame (void)
 		if(!tmp_fte->spte->pinned)
 		{
 			if( pagedir_is_accessed (tmp_fte->owner->pagedir, tmp_fte->spte->upage) )
-			{
 				pagedir_set_accessed (tmp_fte->owner->pagedir, tmp_fte->spte->upage, false);	
-			}
 			else
-			{
 				fte = tmp_fte;
-			}
 		}
-
 		e = list_next(e);
 		if(e == list_end(&frame_table))
 			e = list_begin(&frame_table);
@@ -148,7 +143,7 @@ frame_table_evict_frame (void)
 	if(fte->spte->type == SPT_ENTRY_TYPE_SWAP)
 	{
 		fte->spte->swap_page_index = (pagedir_is_dirty (fte->owner->pagedir, fte->spte->upage))
-			? swap_evict (fte->spte->upage)
+			? swap_evict (kpage)
 			: SWAP_INIT_IDX;
 	} 
 	else if (fte->spte->type == SPT_ENTRY_TYPE_MMAP)

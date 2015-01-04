@@ -169,7 +169,9 @@ spt_load_page_swap (struct spt_entry_t *spte)
 	if(!frame_table_insert (spte))
 		return false;
 
-	swap_free (spte->swap_page_index, spte->upage);
+	swap_free (
+		spte->swap_page_index, 
+		pagedir_get_page (thread_current ()->pagedir, spte->upage));
 	spte->swap_page_index = SWAP_INIT_IDX;
 	spte->pinned = false;
 

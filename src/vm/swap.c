@@ -37,15 +37,13 @@ swap_init(void)
 
 
 int32_t
-swap_evict (void *upage)
+swap_evict (void *kpage)
 {
 	lock_acquire(&swap_lock);
 	size_t idx = bitmap_scan_and_flip(swap_bitmap, 0, 1, SWAP_FREE);
 	if(idx == BITMAP_ERROR)
 		PANIC("Swap space is full!");
 
-	void *kpage = pagedir_get_page (thread_current ()->pagedir, upage);
-	
 	void *buffer = kpage;
 	block_sector_t sector = idx * sectors_per_page;
 	for (; buffer < kpage + PGSIZE; buffer+=BLOCK_SECTOR_SIZE, sector++)
@@ -56,15 +54,13 @@ swap_evict (void *upage)
 }
 
 void
-swap_free (int32_t idx, void *upage)
+swap_free (int32_t idx, void *kpage)
 {
 	lock_acquire(&swap_lock);
 	if(bitmap_test (swap_bitmap, idx) != SWAP_USED)
 		PANIC("Invalid swap page index!");
 	bitmap_flip(swap_bitmap, idx);
 
-	void *kpage = pagedir_get_page (thread_current ()->pagedir, upage);
-	
 	void *buffer = kpage;
 	block_sector_t sector = idx * sectors_per_page;
 	for (; buffer < kpage + PGSIZE; buffer+=BLOCK_SECTOR_SIZE, sector++)

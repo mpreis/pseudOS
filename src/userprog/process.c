@@ -77,7 +77,6 @@ start_process (void *file_name_)
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
   success = load (file_name, &if_.eip, &if_.esp, &save_ptr);
-
   /* If load failed, quit. */
   palloc_free_page (file_name);
   thread_current ()->child_info->load_success = success;  
@@ -366,7 +365,6 @@ load (const char *file_name, void (**eip) (void), void **esp, char **argv)
     t->executable = NULL;
   }
   lock_release (&syscall_lock);
-
   return success;
 }
 
