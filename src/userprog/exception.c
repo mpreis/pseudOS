@@ -173,6 +173,9 @@ page_fault (struct intr_frame *f)
     }
   }
 
+  if (lock_held_by_current_thread (&syscall_lock))
+    lock_release (&syscall_lock);
+
   /* Count page faults. */
   page_fault_cnt++;
 
