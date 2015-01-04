@@ -142,15 +142,23 @@ spt_load_page (struct spt_entry_t *spte)
 {
 	if(spte == NULL) return false;
 
-	if(pagedir_get_page (thread_current ()->pagedir, spte->upage))
+	struct thread *t = thread_current ();
+	if(pagedir_get_page (t->pagedir, spte->upage))
 		return true;
 
 	spte->pinned = true;
 	bool status = false;
 	if(spte->swap_page_index != SWAP_INIT_IDX) 
+	{
 		status = spt_load_page_swap(spte);
+		if (status)
+			pagedir_set_dirty (t->pagedir, spte->upage, true);
+	}
 	else 
 		status = spt_load_page_file(spte);
+
+	if (status)
+		pagedir_set_accessed (t->pagedir, spte->upage, true);
 
 	return status;
 }
