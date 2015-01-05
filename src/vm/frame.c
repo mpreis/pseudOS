@@ -23,7 +23,7 @@ static struct lock ft_lock;
 static struct list frame_table;
 
 static struct frame_table_entry_t *frame_table_get_entry (void *upage);
-static void * frame_table_evict_frame (void);
+static void frame_table_evict_frame (void);
 
 void
 frame_table_init (void)
@@ -119,12 +119,12 @@ frame_table_get_entry (void *upage)
 }
 
 
-static void *
+static void
 frame_table_evict_frame (void)
 {	
 	struct list_elem *e = list_begin(&frame_table);
 	struct frame_table_entry_t *fte = NULL;
-	for(; fte == NULL && e != list_end(&frame_table); e = list_next(e))
+	for(; e != list_end(&frame_table); e = list_next(e))
 	{	
 		struct frame_table_entry_t *tmp_fte = list_entry(e, struct frame_table_entry_t, listelem);
 
@@ -136,7 +136,7 @@ frame_table_evict_frame (void)
 				fte = tmp_fte;
 		}
 
-		if(e == list_end (&frame_table))
+		if(fte == NULL && e == list_end (&frame_table))
 			e = list_begin (&frame_table);
 	}
 
@@ -176,6 +176,4 @@ frame_table_evict_frame (void)
 	list_remove (&fte->listelem);
 	palloc_free_page (kpage);
 	free (fte);
-
-	return kpage;
 }
