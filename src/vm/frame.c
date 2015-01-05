@@ -127,11 +127,13 @@ frame_table_evict_frame (void)
 	for(; e != list_end(&frame_table); e = list_next(e))
 	{	
 		struct frame_table_entry_t *tmp_fte = list_entry(e, struct frame_table_entry_t, listelem);
-		if( is_user_vaddr(tmp_fte->spte->upage) && !tmp_fte->spte->pinned && pagedir_get_page(tmp_fte->owner->pagedir, tmp_fte->spte->upage))
+
+		if( is_user_vaddr(tmp_fte->spte->upage) && !tmp_fte->spte->pinned 
+			&& tmp_fte->spte->upage != NULL )
 			if(fte == NULL || fte->spte->lru_ticks > tmp_fte->spte->lru_ticks)
 				fte = tmp_fte;
-	}	
-	
+	}
+
 	void *kpage = pagedir_get_page (fte->owner->pagedir, fte->spte->upage);
 	if(fte->spte->type == SPT_ENTRY_TYPE_SWAP)
 	{
@@ -162,6 +164,6 @@ frame_table_evict_frame (void)
 	list_remove (&fte->listelem);
 	palloc_free_page (kpage);
 	free (fte);
-
+	
 	return kpage;
 }

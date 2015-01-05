@@ -482,7 +482,9 @@ munmap (mapid_t mapping)
 				spt_entry_free (&spte->hashelem, NULL);	/* free resources of entry. */
 				mfe = mfe_next;
 			}
+			lock_acquire (&syscall_lock);
 			close (mfile->fd);
+			lock_release (&syscall_lock);
 			list_remove (&mfile->elem);
 			free (mfile);
 		}
