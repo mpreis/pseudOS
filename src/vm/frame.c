@@ -124,16 +124,22 @@ frame_table_evict_frame (void)
 {	
 	struct list_elem *e = list_begin(&frame_table);
 	struct frame_table_entry_t *fte = NULL;
-	for(; e != list_end(&frame_table); e = list_next(e))
+	for(; fte == NULL && e != list_end(&frame_table); e = list_next(e))
 	{	
 		struct frame_table_entry_t *tmp_fte = list_entry(e, struct frame_table_entry_t, listelem);
 
-		if( is_user_vaddr(tmp_fte->spte->upage) && !tmp_fte->spte->pinned 
-			&& tmp_fte->spte->upage != NULL )
-			if(fte == NULL || fte->spte->lru_ticks > tmp_fte->spte->lru_ticks)
+		if(!tmp_fte->spte->pinned && tmp_fte->spte->upage != NULL && is_user_vaddr (tmp_fte->spte->upage))
+		{
+			if(fte == NULL)
 				fte = tmp_fte;
+			else if (fte->spte->lru_ticks > tmp_fte->spte->lru_ticks)
+				fte = tmp_fte;
+		}
+
+		if(e == list_end (&frame_table))
+			e = list_begin (&frame_table);
 	}
-	
+
 	struct child_process *cp = fte->owner->child_info;
 	void *kpage = pagedir_get_page (fte->owner->pagedir, fte->spte->upage);
 	if(fte->spte->type == SPT_ENTRY_TYPE_SWAP)
