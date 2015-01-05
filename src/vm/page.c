@@ -144,7 +144,11 @@ spt_load_page (struct spt_entry_t *spte)
 
 	struct thread *t = thread_current ();
 	if(pagedir_get_page (t->pagedir, spte->upage))
+	{
+		spte->lru_ticks = timer_ticks ();
+		pagedir_set_accessed (t->pagedir, spte->upage, true);
 		return true;
+	}
 
 	spte->pinned = true;
 	bool status = false;
@@ -157,8 +161,11 @@ spt_load_page (struct spt_entry_t *spte)
 	else 
 		status = spt_load_page_file(spte);
 
-	if (status)
+	if (status) 
+	{
+		spte->lru_ticks = timer_ticks ();
 		pagedir_set_accessed (t->pagedir, spte->upage, true);
+	}
 
 	return status;
 }

@@ -124,19 +124,12 @@ frame_table_evict_frame (void)
 {	
 	struct list_elem *e = list_begin(&frame_table);
 	struct frame_table_entry_t *fte = NULL;
-	while(fte == NULL)
+	for(; e != list_end(&frame_table); e = list_next(e))
 	{	
 		struct frame_table_entry_t *tmp_fte = list_entry(e, struct frame_table_entry_t, listelem);
-		if(!tmp_fte->spte->pinned)
-		{
-			if( pagedir_is_accessed (tmp_fte->owner->pagedir, tmp_fte->spte->upage) )
-				pagedir_set_accessed (tmp_fte->owner->pagedir, tmp_fte->spte->upage, false);	
-			else
+		if( is_user_vaddr(tmp_fte->spte->upage) && !tmp_fte->spte->pinned && pagedir_get_page(tmp_fte->owner->pagedir, tmp_fte->spte->upage))
+			if(fte == NULL || fte->spte->lru_ticks > tmp_fte->spte->lru_ticks)
 				fte = tmp_fte;
-		}
-		e = list_next(e);
-		if(e == list_end(&frame_table))
-			e = list_begin(&frame_table);
 	}	
 	
 	void *kpage = pagedir_get_page (fte->owner->pagedir, fte->spte->upage);
