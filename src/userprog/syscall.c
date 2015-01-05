@@ -198,6 +198,7 @@ wait (pid_t pid)
 	{
 		cp->parent_is_waiting = true;
 		sema_down (&cp->alive);
+		sema_up (&cp->alive);
 		return cp->exit_status;
 	}
 	return SYSCALL_ERROR;

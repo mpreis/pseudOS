@@ -133,7 +133,8 @@ frame_table_evict_frame (void)
 			if(fte == NULL || fte->spte->lru_ticks > tmp_fte->spte->lru_ticks)
 				fte = tmp_fte;
 	}
-
+	
+	struct child_process *cp = fte->owner->child_info;
 	void *kpage = pagedir_get_page (fte->owner->pagedir, fte->spte->upage);
 	if(fte->spte->type == SPT_ENTRY_TYPE_SWAP)
 	{
@@ -159,11 +160,16 @@ frame_table_evict_frame (void)
 			fte->spte->upage, fte->spte->type);
 	}
 
-	pagedir_set_accessed (fte->owner->pagedir, fte->spte->upage, false);
-	pagedir_clear_page (fte->owner->pagedir, fte->spte->upage);
+	if(!sema_try_down(&cp->alive))
+	{
+		pagedir_set_accessed (fte->owner->pagedir, fte->spte->upage, false);
+		pagedir_clear_page (fte->owner->pagedir, fte->spte->upage);
+	}
+	else
+		sema_up(&cp->alive);
 	list_remove (&fte->listelem);
 	palloc_free_page (kpage);
 	free (fte);
-	
+
 	return kpage;
 }
