@@ -36,7 +36,8 @@ typedef int tid_t;
 #define FD_ARR_DEFAULT_LENGTH 128    /* pseudOS: Default size of the file-descriptors array. */
 
 /* pseudOS: Project 3*/
-#define DEFAULT_MAPID 0              /* pseudOS: Default size of the memory mapped files array. */
+#define INIT_MAPID 0                 /* pseudOS: First id of a memory mapped file. */
+#define MUNMAP_ALL -2                /* pseudOS: Has to be smaller than -1(!) because -1 is a ERROR case. */
 
 /* A kernel thread or user process.
 
@@ -119,7 +120,7 @@ struct thread
 
     /* pseudOS: Project 3 */
     struct hash* spt;                       /* pseudOS: Supplemental page table. */
-    struct list mapped_files;               /* pseudOS: This array holds pointers of all memory mapped files. */ 
+    struct list mapped_files;               /* pseudOS: This list holds pointers of all memory mapped files. */ 
     int next_mapid;
 #endif
 
@@ -137,6 +138,16 @@ struct thread
     /* pseudOS: Project 2 */
     struct file* fds[FD_ARR_DEFAULT_LENGTH]; /* pseudOS: This array holds pointers of all open files. */
   };
+
+/* pseudOS: Project 3 - memory mapped file */
+struct mapped_file_t 
+{
+  struct list_elem elem;
+  int fd;
+  int mapid;
+  void *addr;
+  struct list spt_entries;
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

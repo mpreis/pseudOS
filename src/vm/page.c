@@ -28,12 +28,6 @@ spt_init(struct hash *spt)
 	hash_init (spt, spt_entry_hash, spt_entry_less, NULL);
 }
 	
-void 
-spt_init_lock()
-{
-	lock_init (&spt_lock);
-}
-
 struct spt_entry_t * 
 spt_insert (struct hash *spt, struct file *file, off_t ofs, uint8_t *upage, 
 	uint32_t read_bytes, uint32_t zero_bytes, bool writable, bool pinned,

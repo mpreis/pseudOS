@@ -266,7 +266,7 @@ thread_create (const char *name, int priority,
   t->spt = malloc(sizeof(struct hash));
   spt_init(t->spt);
   list_init(&t->mapped_files);
-  t->next_mapid = DEFAULT_MAPID; 
+  t->next_mapid = INIT_MAPID; 
 #endif
 
   intr_set_level (old_level);

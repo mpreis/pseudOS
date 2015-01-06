@@ -226,14 +226,53 @@ as long as they are needed.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+#define INIT_MAPID 0   // First id of a memory mapped file..
+#define MUNMAP_ALL -2  // Has to be smaller than -1(!) because -1 is a ERROR case.
+
+Extesions of struct thread:
+	struct list mapped_files; 	// This list holds pointers of all memory mapped files 
+							  	// (struct mapped_file_t). 
+	int next_mapid;			  	// Represents the next free map-id
+
+struct mapped_file_t 
+{
+  struct list_elem elem;
+  int fd;						// File descriptor of mapped file.		
+  int mapid;					// Id of the mapping (unique within a thread).
+  void *addr;					// Data address.
+  struct list spt_entries;		// List of supplemental page table entry which represent the mapping.
+};
+
 ---- ALGORITHMS ----
 
 >> C2: Describe how memory mapped files integrate into your virtual
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
+Each use thread has a list of memory mapped files with a unique id. 
+To ensure this we use a counter with is increased if mmap is 
+successfully called. Calling mmap creates a struct which represents
+the memory mapped file and an number of supplemental page table
+entries. At this point nothing is loaded, because this should happen
+lazy (similar to loading the executable). In case of evction we don't
+swap the page. If the page is dirty we write it back to the corresponding 
+file. Otherwise we only free the frame and some other things required.
+
+Calling munmap has a similar behavior. First we have to check if the
+mapping is valid and get the structure which represents the mapping.
+Next we iterate over the spt_entries list. This list holds all
+supplemental page table entries of a mapping. If a page is dirty we
+write it back to the corresponding file. At least we free all acquired
+resoucres. 
+
 >> C3: Explain how you determine whether a new file mapping overlaps
 >> any existing segment.
+
+To determine whether a new file mapping overlaps any exisiting segments
+we iterate over the address range of the file and lookup each address
+in the supplemental page table of the thread. If there are no entries
+the file can be mapped. Otherwise it overlaps with some existing and
+we don't create the mapping. 
 
 ---- RATIONALE ----
 
@@ -243,6 +282,11 @@ as long as they are needed.
 >> that much of their implementation can be shared.  Explain why your
 >> implementation either does or does not share much of the code for
 >> the two situations.
+
+For loading the required pages we use the same mechanism for executables 
+and memory mapped files. The function spt_load_page handles this case. 
+One rease to do so that the procedure is nearly the same. We also use the 
+same function to evict a frame for both cases.
 
 			   SURVEY QUESTIONS
 			   ================
