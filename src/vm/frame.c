@@ -131,9 +131,7 @@ frame_table_evict_frame (void)
 		if(tmp_fte->spte->pinned == SPT_UNPINNED && tmp_fte->spte->upage != NULL 
 			&& is_user_vaddr (tmp_fte->spte->upage))
 		{
-			if(fte == NULL)
-				fte = tmp_fte;
-			else if (fte->spte->lru_ticks > tmp_fte->spte->lru_ticks)
+			if(fte == NULL || fte->spte->lru_ticks > tmp_fte->spte->lru_ticks)
 				fte = tmp_fte;
 		}
 

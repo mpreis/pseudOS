@@ -446,8 +446,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
     size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
     size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
+    bool pinned = writable ? SPT_UNPINNED : SPT_PINNED;
+
     if (! spt_insert (thread_current ()->spt, file, ofs, 
-          upage, page_read_bytes, page_zero_bytes, writable, SPT_UNPINNED, SPT_ENTRY_TYPE_SWAP) )
+          upage, page_read_bytes, page_zero_bytes, writable, pinned, SPT_ENTRY_TYPE_SWAP) )
         return false; 
 
     read_bytes -= page_read_bytes;
@@ -455,7 +457,6 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
     ofs += page_read_bytes;
     upage += PGSIZE;
   }
-
   return true;
 }
 
@@ -555,7 +556,8 @@ stack_growth (void *vaddr)
     spt_remove (thread_current ()->spt, upage);
   }
   
-  spte->pinned = SPT_UNPINNED; 
+  if(intr_context())
+    spte->pinned = SPT_UNPINNED; 
   return success;
 }
 
