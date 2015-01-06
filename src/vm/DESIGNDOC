@@ -71,16 +71,25 @@ static struct list frame_table;	// List that holds all frame table entries
 >> A2: In a few paragraphs, describe your code for locating the frame,
 >> if any, that contains the data of a given page.
 
-frame_table_get_entry is used to locate a frame. Every frame table entry 
-has a pointer to the supplemental page table it belongs to. So, to look up 
-a frame one simply needs the user virtual address. The function iterates over 
-the whole frame table and checks if it belongs to the given page.
+If a page fault occurs we lookup the address in the supplemental page
+table. If there is an entry we are able to load the page. Otherwise
+it is handle like a page fault. In case that the entry exists we call
+spt_load_page. Now we can decid if we have to go and get the page from 
+disk or from swap. The next step is to acquire a frame. This allocates 
+a page by calling palloc_get_page, which might lead to an 
+frame_table_evict_frame if it is not possible to allocate one more
+page. After the page is allocated it is nesseccary to create an entry in
+the thread pagedir by calling install_page. The last step is to load the 
+data. Getting the page from disk needs to call file_read_at and getting 
+page from swap requires swap_free.
 
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
 
-
+To avoid this issuse we work with user virtual addresses. In syscall.c we
+verify if the given address is valid. If a page fault occurs the supplemental 
+page table is also helpful to check whether the address is valid or not.
 
 ---- SYNCHRONIZATION ----
 
@@ -100,6 +109,12 @@ his entry.
 
 >> A5: Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
+
+Each entry in the frame table holds a pointer to the corresponding 
+supplemental page table entry. This is needed to map an upage to a
+frame. Furthermore, we hold a reference to the thread which is the
+owner of the upage. This allows us to lookup the page in the pagdir
+of the thread.
 
 		       PAGING TO AND FROM DISK
 		       =======================
@@ -249,7 +264,7 @@ struct mapped_file_t
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
-Each use thread has a list of memory mapped files with a unique id. 
+Each user thread has a list of memory mapped files with a unique id. 
 To ensure this we use a counter with is increased if mmap is 
 successfully called. Calling mmap creates a struct which represents
 the memory mapped file and an number of supplemental page table
