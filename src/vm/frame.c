@@ -128,7 +128,8 @@ frame_table_evict_frame (void)
 	{	
 		struct frame_table_entry_t *tmp_fte = list_entry(e, struct frame_table_entry_t, listelem);
 
-		if(!tmp_fte->spte->pinned && tmp_fte->spte->upage != NULL && is_user_vaddr (tmp_fte->spte->upage))
+		if(tmp_fte->spte->pinned == SPT_UNPINNED && tmp_fte->spte->upage != NULL 
+			&& is_user_vaddr (tmp_fte->spte->upage))
 		{
 			if(fte == NULL)
 				fte = tmp_fte;

@@ -29,6 +29,10 @@ static bool is_valid_mapid(mapid_t mapping);
 static bool is_valid_mapping (void *addr, off_t file_len);
 static bool is_mapped_file (int fd);
 
+static void set_spte_pin (void * addr, bool pinned);
+static void set_args_pin (struct intr_frame *f, unsigned nr_of_args, bool pinned);
+static void set_buffer_pin (void * buffer, unsigned size, bool pinned);
+
 void
 syscall_init (void) 
 {
@@ -50,43 +54,59 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_EXIT: 
 			check_args (f, 1);
+			set_args_pin (f, 1, SPT_PINNED);
 			exit ( *(int *)(f->esp + OFFSET_ARG) );
+			set_args_pin (f, 1, SPT_UNPINNED);
 			break;
 
 		case SYS_EXEC:
 			check_args (f, 1);
 			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
+			set_args_pin (f, 1, SPT_PINNED);
 			f->eax = exec ( *(char **)(f->esp + OFFSET_ARG) );
+			set_args_pin (f, 1, SPT_UNPINNED);
 			break; 
 
 		case SYS_WAIT: 
 			check_args (f, 1);
+			set_args_pin (f, 1, SPT_PINNED);
 			f->eax = wait ( *(pid_t *)(f->esp + OFFSET_ARG) );
+			set_args_pin (f, 1, SPT_UNPINNED);
 			break;
 
 		case SYS_CREATE: 
 			check_args (f, 2);
 			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
+			
+			set_args_pin (f, 2, SPT_PINNED);
 			f->eax = create ( 
 				*(char **)(f->esp + OFFSET_ARG), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 2) );
+			
+			set_args_pin (f, 2, SPT_UNPINNED);
 			break;
 
 		case SYS_REMOVE: 
 			check_args (f, 1);
 			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
+			set_args_pin (f, 1, SPT_PINNED);
 			f->eax = remove ( *(char **)(f->esp + OFFSET_ARG) );
+			set_args_pin (f, 1, SPT_UNPINNED);
 			break;
 
 		case SYS_OPEN: 
 			check_args (f, 1);
 			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
+			set_args_pin (f, 1, SPT_PINNED);
 			f->eax = open ( *(char **)(f->esp + OFFSET_ARG) );
+			set_args_pin (f, 1, SPT_UNPINNED);
 			break;
 
 		case SYS_FILESIZE: 
 			check_args (f, 1);
+			set_args_pin (f, 1, SPT_PINNED);
 			f->eax = filesize ( *(int *)(f->esp + OFFSET_ARG) );
+			set_args_pin (f, 1, SPT_UNPINNED);
 			break;
 
 		case SYS_READ:
@@ -95,10 +115,23 @@ syscall_handler (struct intr_frame *f)
 				*(char **)(f->esp + OFFSET_ARG * 2), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 3), 
 				f->esp);
+			
+			set_args_pin (f, 3, SPT_PINNED);
+			set_buffer_pin (
+				*(char **)(f->esp + OFFSET_ARG * 2), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 3),
+				SPT_PINNED);
+
 			f->eax = read (
 				*(int *)(f->esp + OFFSET_ARG), 
 				*(char **)(f->esp + OFFSET_ARG * 2), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 3) );
+			
+			set_buffer_pin (
+				*(char **)(f->esp + OFFSET_ARG * 2), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 3),
+				SPT_UNPINNED);
+			set_args_pin (f, 3, SPT_UNPINNED);
 			break;
 		
 		case SYS_WRITE:
@@ -107,39 +140,62 @@ syscall_handler (struct intr_frame *f)
 				*(char **)(f->esp + OFFSET_ARG * 2), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 3), 
 				f->esp);
+			
+			set_args_pin (f, 3, SPT_PINNED);
+			set_buffer_pin (
+				*(char **)(f->esp + OFFSET_ARG * 2), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 3),
+				SPT_PINNED);
+
 			f->eax = write ( 
 				*(int *)(f->esp + OFFSET_ARG), 
 				*(char **)(f->esp + OFFSET_ARG * 2), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 3) );
+			
+			set_buffer_pin (
+				*(char **)(f->esp + OFFSET_ARG * 2), 
+				*(unsigned int *)(f->esp + OFFSET_ARG * 3),
+				SPT_UNPINNED);
+			set_args_pin (f, 3, SPT_UNPINNED);
 			break;
 
 		case SYS_SEEK: 
 			check_args (f, 2);
+			set_args_pin (f, 2, SPT_PINNED);
 			seek( 
 				*(int *)(f->esp + OFFSET_ARG ), 
 				*(unsigned int *)(f->esp + OFFSET_ARG * 2) );
+			set_args_pin (f, 2, SPT_UNPINNED);
 			break;
 
 		case SYS_TELL: 
 			check_args (f, 1);
+			set_args_pin (f, 1, SPT_PINNED);
 			f->eax = tell ( *(int *)(f->esp + OFFSET_ARG) );
+			set_args_pin (f, 1, SPT_UNPINNED);
 			break;
 
 		case SYS_CLOSE: 
 			check_args (f, 1);
+			set_args_pin (f, 1, SPT_PINNED);
 			close ( *(int *)(f->esp + OFFSET_ARG) );
+			set_args_pin (f, 1, SPT_UNPINNED);
 			break;
 
 		case SYS_MMAP:
 			check_args (f, 2);
+			set_args_pin (f, 2, SPT_PINNED);
 			f->eax = mmap (
 				*(int *)(f->esp + OFFSET_ARG), 
 				*(void **)(f->esp + OFFSET_ARG * 2) );
+			set_args_pin (f, 2, SPT_UNPINNED);
 			break;
 
 		case SYS_MUNMAP:
 			check_args (f, 1);
+			set_args_pin (f, 1, SPT_PINNED);
 			munmap ( *(mapid_t *)(f->esp + OFFSET_ARG) );
+			set_args_pin (f, 1, SPT_UNPINNED);
 			break;
 
 		default:
@@ -431,7 +487,7 @@ mmap (int fd, void *addr)
 		uint32_t zero_bytes = PGSIZE - read_bytes;
 
 		struct spt_entry_t *spte = spt_insert (t->spt, f, ofs, (uint8_t *)addr, 
-				read_bytes, zero_bytes, true, SPT_ENTRY_TYPE_MMAP);
+				read_bytes, zero_bytes, true, SPT_UNPINNED, SPT_ENTRY_TYPE_MMAP);
 		if(! spte)
 		{
 			munmap (mfile->mapid);
@@ -468,7 +524,7 @@ munmap (mapid_t mapping)
 			{
 				mfe_next  = list_next (mfe);
 				struct spt_entry_t *spte = list_entry (mfe, struct spt_entry_t, listelem);
-				spte->pinned = true;
+				spte->pinned = SPT_PINNED;
 				void *kpage = pagedir_get_page (t->pagedir, spte->upage);
 
 				if (kpage && file && pagedir_is_dirty (t->pagedir, spte->upage))
@@ -586,10 +642,7 @@ check_args (struct intr_frame *f, unsigned nr_of_args)
 static void
 check_stack_growth(void *vaddr, void *esp)
 {
-	// printf(" -0- check_stack_growth \n");
-	if(vaddr == NULL || !is_user_vaddr(vaddr) 
-		|| pg_round_down(vaddr) == NULL || !is_user_vaddr(pg_round_down(vaddr))
-		|| vaddr < USER_VADDR_BOTTOM ) 
+	if(vaddr == NULL || !is_user_vaddr(vaddr))
 		exit (SYSCALL_ERROR);
 
 	struct spt_entry_t *e = spt_lookup (thread_current ()->spt, vaddr);
@@ -597,8 +650,6 @@ check_stack_growth(void *vaddr, void *esp)
 	if(e)
 	{
 		spt_load_page (e);
-		// if(!spt_load_page (e))
-		// 	exit (SYSCALL_ERROR);	// maybe not needed
 	}
 	else if(vaddr >= (esp - 32))
     {
@@ -636,4 +687,32 @@ is_mapped_file (int fd)
 			return true;
 	}
 	return false;
+}
+
+
+static void
+set_spte_pin (void * addr, bool pinned)
+{
+	struct spt_entry_t *spte = spt_lookup (thread_current ()->spt, addr);
+	if(spte != NULL)
+		spte->pinned = pinned;	
+}
+
+static void
+set_args_pin (struct intr_frame *f, unsigned nr_of_args, bool pinned)
+{
+	unsigned i;
+	for (i = 1; i <= nr_of_args; i++)
+	{	
+		void * addr = (f->esp + OFFSET_ARG * i);
+		set_spte_pin (addr, pinned);
+	}
+}
+
+static void 
+set_buffer_pin (void * buffer, unsigned size, bool pinned)
+{
+	unsigned i;
+	for (i = 0; i < size; i++)
+		set_spte_pin (buffer + i, pinned);
 }

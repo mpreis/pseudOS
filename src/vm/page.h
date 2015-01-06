@@ -8,6 +8,8 @@
 #include "filesys/off_t.h"
 
 #define SWAP_INIT_IDX -1
+#define SPT_PINNED true
+#define SPT_UNPINNED false
 
 enum spt_entry_type_t
 {
@@ -37,7 +39,8 @@ struct lock spt_lock;
 void spt_init(struct hash *spt);
 void spt_init_lock(void);
 struct spt_entry_t * spt_insert (struct hash *spt, struct file *file, off_t ofs, 
-	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable, enum spt_entry_type_t type);
+	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable, bool pinned,
+	enum spt_entry_type_t type);
 struct spt_entry_t * spt_remove (struct hash *spt, void *upage);
 unsigned spt_entry_hash (const struct hash_elem *p_, void *aux UNUSED);
 bool spt_entry_less (const struct hash_elem *a_, const struct hash_elem *b_, void *aux UNUSED);

@@ -160,7 +160,6 @@ page_fault (struct intr_frame *f)
       {
         if(spt_load_page (e))
         {
-          e->pinned = false;
           return;
         }
       }

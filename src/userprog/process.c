@@ -447,7 +447,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
     size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
     if (! spt_insert (thread_current ()->spt, file, ofs, 
-          upage, page_read_bytes, page_zero_bytes, writable, SPT_ENTRY_TYPE_SWAP) )
+          upage, page_read_bytes, page_zero_bytes, writable, SPT_UNPINNED, SPT_ENTRY_TYPE_SWAP) )
         return false; 
 
     read_bytes -= page_read_bytes;
@@ -547,20 +547,15 @@ stack_growth (void *vaddr)
 
   uint8_t *upage = pg_round_down(vaddr);
   struct spt_entry_t *spte = spt_insert (thread_current ()->spt, NULL, 0, upage, 
-                                          PGSIZE, 0, writable, SPT_ENTRY_TYPE_SWAP); 
-  spte->pinned = true;
+                                          PGSIZE, 0, writable, SPT_PINNED, SPT_ENTRY_TYPE_SWAP); 
   success = frame_table_insert (spte);
   
   if(!success)
   {
     spt_remove (thread_current ()->spt, upage);
   }
-    
-  if(intr_context())
-  {
-    spte->pinned = false;
-  }
-    
+  
+  spte->pinned = SPT_UNPINNED; 
   return success;
 }
 

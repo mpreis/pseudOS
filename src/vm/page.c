@@ -36,7 +36,8 @@ spt_init_lock()
 
 struct spt_entry_t * 
 spt_insert (struct hash *spt, struct file *file, off_t ofs, uint8_t *upage, 
-	uint32_t read_bytes, uint32_t zero_bytes, bool writable, enum spt_entry_type_t type)
+	uint32_t read_bytes, uint32_t zero_bytes, bool writable, bool pinned,
+	enum spt_entry_type_t type)
 {
 	ASSERT ( (read_bytes + zero_bytes) == PGSIZE );
 	//ASSERT(spt_lookup (spt, upage) == NULL);
@@ -54,6 +55,7 @@ spt_insert (struct hash *spt, struct file *file, off_t ofs, uint8_t *upage,
 	e->writable = writable;
 	e->type = type;
 	e->swap_page_index = SWAP_INIT_IDX;
+	e->pinned = pinned;
 	e->lru_ticks = timer_ticks();
 	
 	struct hash_elem *he = hash_insert (spt, &e->hashelem);
@@ -141,16 +143,21 @@ bool
 spt_load_page (struct spt_entry_t *spte)
 {
 	if(spte == NULL) return false;
+	
+	bool is_pinned = spte->pinned;
+	if(!is_pinned) 
+		spte->pinned = SPT_PINNED;
 
 	struct thread *t = thread_current ();
 	if(pagedir_get_page (t->pagedir, spte->upage))
 	{
 		spte->lru_ticks = timer_ticks ();
 		pagedir_set_accessed (t->pagedir, spte->upage, true);
+		if(!is_pinned)
+			spte->pinned = SPT_UNPINNED;
 		return true;
 	}
 
-	spte->pinned = true;
 	bool status = false;
 	if(spte->swap_page_index != SWAP_INIT_IDX) 
 	{
@@ -167,6 +174,8 @@ spt_load_page (struct spt_entry_t *spte)
 		pagedir_set_accessed (t->pagedir, spte->upage, true);
 	}
 
+	if(!is_pinned)
+		spte->pinned = SPT_UNPINNED;
 	return status;
 }
 
@@ -180,7 +189,6 @@ spt_load_page_swap (struct spt_entry_t *spte)
 		spte->swap_page_index, 
 		pagedir_get_page (thread_current ()->pagedir, spte->upage));
 	spte->swap_page_index = SWAP_INIT_IDX;
-	spte->pinned = false;
 
 	return true;
 }
@@ -206,7 +214,6 @@ spt_load_page_file (struct spt_entry_t *spte)
 		memset(kpage + spte->read_bytes, 0, spte->zero_bytes);
 	}
 
-	spte->pinned = false;
 	lock_release (&syscall_lock);
 	return true;
 }
