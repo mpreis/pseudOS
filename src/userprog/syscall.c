@@ -18,13 +18,12 @@
 #include <hash.h>
 
 #define OFFSET_ARG 4							/* pseudOS: Offest of arguments on the stack. */
-//static struct lock syscall_lock;	/* pseudOS: Lock variable to ensure a secure execution of a system-call. */
 
 static void syscall_handler (struct intr_frame *);
 static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descriptor is valid. */
 static void check_args (struct intr_frame *f, unsigned nr_of_args);
 static void check_buffer (void *vaddr, unsigned size, void *esp);
-static void check_stack_growth(void *vaddr, void *esp);
+static void check_usr_ptr(void *vaddr, void *esp);
 static bool is_valid_mapid(mapid_t mapping);
 static bool is_valid_mapping (void *addr, off_t file_len);
 static bool is_mapped_file (int fd);
@@ -43,9 +42,6 @@ syscall_init (void)
 void
 syscall_handler (struct intr_frame *f) 
 {
-	if(!is_valid_usr_ptr(f->esp, 0)) 
-		exit (SYSCALL_ERROR);
-
 	switch(*(uint32_t *) (f->esp))
 	{
 		case SYS_HALT: 
@@ -61,7 +57,7 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_EXEC:
 			check_args (f, 1);
-			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
+			check_usr_ptr (*(char **)(f->esp + OFFSET_ARG), f->esp);
 			set_args_pin (f, 1, SPT_PINNED);
 			f->eax = exec ( *(char **)(f->esp + OFFSET_ARG) );
 			set_args_pin (f, 1, SPT_UNPINNED);
@@ -76,7 +72,7 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_CREATE: 
 			check_args (f, 2);
-			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
+			check_usr_ptr (*(char **)(f->esp + OFFSET_ARG), f->esp);
 			
 			set_args_pin (f, 2, SPT_PINNED);
 			f->eax = create ( 
@@ -88,7 +84,7 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_REMOVE: 
 			check_args (f, 1);
-			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
+			check_usr_ptr (*(char **)(f->esp + OFFSET_ARG), f->esp);
 			set_args_pin (f, 1, SPT_PINNED);
 			f->eax = remove ( *(char **)(f->esp + OFFSET_ARG) );
 			set_args_pin (f, 1, SPT_UNPINNED);
@@ -96,7 +92,7 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_OPEN: 
 			check_args (f, 1);
-			check_stack_growth (*(char **)(f->esp + OFFSET_ARG), f->esp);
+			check_usr_ptr (*(char **)(f->esp + OFFSET_ARG), f->esp);
 			set_args_pin (f, 1, SPT_PINNED);
 			f->eax = open ( *(char **)(f->esp + OFFSET_ARG) );
 			set_args_pin (f, 1, SPT_UNPINNED);
@@ -549,45 +545,6 @@ munmap (mapid_t mapping)
 	} /* end iteration over mapped files */
 }
 
-/* 
- * pseudOS: Checks if the given pointer is a valid user-space pointer.
- * 
- * Snippet of the Pintos docu: 
- * As part of a system call, the kernel must often access 
- * memory through pointers provided by a user program. The kernel 
- * must be very careful about doing so, because the user can pass 
- * a null pointer, a pointer to unmapped virtual memory, or a pointer 
- * to kernel virtual address space (above PHYS_BASE). All of these types 
- * of invalid pointers must be rejected without harm to the kernel or other 
- * running processes, by terminating the offending process and freeing its 
- * resources.
- */
-bool
-is_valid_usr_ptr(const void * ptr, unsigned size)
-{
-	if(ptr == NULL || ! is_user_vaddr(ptr) || ! is_user_vaddr(ptr + size)) 
-		return false;
-	
-	/* Check if every page is mapped */
-	uint32_t *pg;
-	for (pg  = pg_round_down (ptr); 
-		 pg <= (uint32_t *) pg_round_down (ptr + size);
-		 pg += PGSIZE
-		)
-	{
-		struct spt_entry_t *spte;
-		if ( (spte = spt_lookup (thread_current ()->spt, pg)) != NULL )
-		{
-			spt_load_page (spte);
-		}
-		else 
-		{
-			return false;
-		}
-	}
-	return true;
-}
-
 /*
  * pseudOS: Checks if the given file-descriptor is valid. 
  */
@@ -633,14 +590,15 @@ check_args (struct intr_frame *f, unsigned nr_of_args)
 {
 	unsigned i;
 	for (i = 1; i <= nr_of_args; i++)
-		check_stack_growth((f->esp + OFFSET_ARG * i), f->esp);
+		check_usr_ptr((f->esp + OFFSET_ARG * i), f->esp);
 }
 
 /*
- * pseudOS: Checks if a stack growth is requiered and grows the stack in case.
+ * pseudOS: Checks if a page has to be loaded or a stack growth is requiered 
+ * and grows the stack in case.
  */
 static void
-check_stack_growth(void *vaddr, void *esp)
+check_usr_ptr (void *vaddr, void *esp)
 {
 	if(vaddr == NULL || !is_user_vaddr(vaddr))
 		exit (SYSCALL_ERROR);
@@ -663,16 +621,19 @@ check_stack_growth(void *vaddr, void *esp)
 }
 
 /*
- * pseudOS: Checks for a given buffer if a stack growth is required.
+ * pseudOS: Check buffer pages are valid.
  */
 static void
 check_buffer (void *buffer, unsigned size, void *esp)
 {
 	unsigned i;
 	for (i = 0; i < size; i++)
-		check_stack_growth(buffer+i, esp);
+		check_usr_ptr(buffer+i, esp);
 }
 
+/*
+ * pseudOS: Returns true if there is a mapping for the given FD, otherwise false.
+ */
 static bool
 is_mapped_file (int fd)
 {
@@ -689,7 +650,10 @@ is_mapped_file (int fd)
 	return false;
 }
 
-
+/*
+ * pseudOS: Looks up ADDR in the supplemental page table. 
+ * If ther is an entry pinned is set to PINNED.
+ */
 static void
 set_spte_pin (void * addr, bool pinned)
 {
@@ -698,6 +662,9 @@ set_spte_pin (void * addr, bool pinned)
 		spte->pinned = pinned;	
 }
 
+/*
+ * pseudOS: Sets NR_OF_ARGS values of the stack PINNED.
+ */
 static void
 set_args_pin (struct intr_frame *f, unsigned nr_of_args, bool pinned)
 {
@@ -709,6 +676,9 @@ set_args_pin (struct intr_frame *f, unsigned nr_of_args, bool pinned)
 	}
 }
 
+/*
+ * pseudOS: Sets the pages of the given buffer to PINNED.
+ */
 static void 
 set_buffer_pin (void * buffer, unsigned size, bool pinned)
 {

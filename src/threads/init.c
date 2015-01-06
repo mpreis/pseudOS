@@ -102,7 +102,6 @@ main (void)
   malloc_init ();
   paging_init ();
   frame_table_init ();  /* pseudOS */
-  spt_init_lock();      /* pseudOS */
   
   /* Segmentation. */
 #ifdef USERPROG

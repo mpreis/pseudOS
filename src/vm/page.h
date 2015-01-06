@@ -37,7 +37,6 @@ struct spt_entry_t
 struct lock spt_lock;
 
 void spt_init(struct hash *spt);
-void spt_init_lock(void);
 struct spt_entry_t * spt_insert (struct hash *spt, struct file *file, off_t ofs, 
 	uint8_t *upage, uint32_t read_bytes, uint32_t zero_bytes, bool writable, bool pinned,
 	enum spt_entry_type_t type);

@@ -154,16 +154,8 @@ page_fault (struct intr_frame *f)
   if(not_present && is_user_vaddr(fault_addr))
   {
     struct spt_entry_t *e = spt_lookup (thread_current ()->spt, fault_addr);
-    if(e) 
-    { 
-      if((write && e->writable) || !write)
-      {
-        if(spt_load_page (e))
-        {
-          return;
-        }
-      }
-    }
+    if(e && ((write && e->writable) || !write)  && spt_load_page (e))
+      return;
     else if(fault_addr >= f->esp - 32)
     {
       //pseudOS: if a pagefault occurs between esp and (esp - 32) the stack has to grow
