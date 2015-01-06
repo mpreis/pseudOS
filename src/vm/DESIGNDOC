@@ -101,6 +101,9 @@ his entry.
 >> A5: Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
 
+
+
+
 		       PAGING TO AND FROM DISK
 		       =======================
 
@@ -133,6 +136,13 @@ number. This happens over the pointer to spte, where the number is stored.
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
+
+In our implementation of evicting a frame, we simply evict a frame. The 
+result is a free frame. If P evict a frame from process Q, the frame is 
+freed in frame_table_evict_frame and in the next step of frame_table_insert 
+a "new" frame is allocated. 
+The variables in the supplemental page table entry, like swap_page_index, 
+etc., are also updated in these functions. 
 
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
@@ -249,28 +259,28 @@ struct mapped_file_t
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
-Each use thread has a list of memory mapped files with a unique id. 
-To ensure this we use a counter with is increased if mmap is 
+Each user thread has a list of memory mapped files with a unique id. 
+To ensure this we use a counter which is increased if mmap is 
 successfully called. Calling mmap creates a struct which represents
-the memory mapped file and an number of supplemental page table
+the memory mapped file and a number of supplemental page table
 entries. At this point nothing is loaded, because this should happen
 lazy (similar to loading the executable). In case of evction we don't
 swap the page. If the page is dirty we write it back to the corresponding 
-file. Otherwise we only free the frame and some other things required.
+file. Otherwise we only free the frame.
 
 Calling munmap has a similar behavior. First we have to check if the
 mapping is valid and get the structure which represents the mapping.
 Next we iterate over the spt_entries list. This list holds all
 supplemental page table entries of a mapping. If a page is dirty we
 write it back to the corresponding file. At least we free all acquired
-resoucres. 
+resources. 
 
 >> C3: Explain how you determine whether a new file mapping overlaps
 >> any existing segment.
 
 To determine whether a new file mapping overlaps any exisiting segments
 we iterate over the address range of the file and lookup each address
-in the supplemental page table of the thread. If there are no entries
+in the supplemental page table of the thread. If there are no entries,
 the file can be mapped. Otherwise it overlaps with some existing and
 we don't create the mapping. 
 
@@ -285,8 +295,8 @@ we don't create the mapping.
 
 For loading the required pages we use the same mechanism for executables 
 and memory mapped files. The function spt_load_page handles this case. 
-One rease to do so that the procedure is nearly the same. We also use the 
-same function to evict a frame for both cases.
+One reason for this is that the procedure is nearly the same. We also use 
+the same function to evict a frame for both cases.
 
 			   SURVEY QUESTIONS
 			   ================
