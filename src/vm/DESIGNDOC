@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Thomas Huetter <thomas.huetter@stud.sbg.ac.at>
+Mario Preishuber <mario.preishuber@stud.sbg.ac.at>
 
 ---- PRELIMINARIES ----
 
@@ -30,19 +29,72 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Extensions of vm/page.h:
+enum spt_entry_type_t
+{
+	SPT_ENTRY_TYPE_MMAP,		// Entry is MMAP
+	SPT_ENTRY_TYPE_SWAP,		// Entry is SWAP
+	SPT_ENTRY_TYPE_CNTR
+};
+
+struct spt_entry_t 
+{
+	struct hash_elem hashelem;	// Entry hash element for supplemental page table
+	struct list_elem listelem;	// List elem for mapped files
+	int64_t lru_ticks;			// Ticks from the last access, needed for eviction
+	struct file *file;			// File where page was read from
+	off_t ofs;					// File offset
+	uint8_t *upage;				// User virtual address of the page
+	uint32_t read_bytes;		// Number of bytes in this page
+	uint32_t zero_bytes;		// Number of zero bytes in this page
+	bool writable;				// Is this entry writable?
+	bool pinned;				// Pin is needed when kernel is accessing user memory
+	int32_t swap_page_index;	// Needed to find corresponding swap sector
+	enum spt_entry_type_t type;	// Defines the type of the entry swap or mmap
+};
+
+Extensions of vm/frame.h:
+struct frame_table_entry_t
+{
+	struct list_elem listelem;	// List elem for frame table
+	struct thread *owner;		// Thread that "ownes" the frame
+	struct spt_entry_t *spte;	// Corresponding supplemental page entry
+};
+
+Extensions of vm/frame.c:
+static struct lock ft_lock;		// Lock needed to avoid race conditions in the frame table
+static struct list frame_table;	// List that holds all frame table entries
+
+
 ---- ALGORITHMS ----
 
 >> A2: In a few paragraphs, describe your code for locating the frame,
 >> if any, that contains the data of a given page.
 
+frame_table_get_entry is used to locate a frame. Every frame table entry 
+has a pointer to the supplemental page table it belongs to. So, to look up 
+a frame one simply needs the user virtual address. The function iterates over 
+the whole frame table and checks if it belongs to the given page.
+
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
+
+
 
 ---- SYNCHRONIZATION ----
 
 >> A4: When two user processes both need a new frame at the same time,
 >> how are races avoided?
+
+To avoid any kind of races in the frame table, we've introduced a global 
+lock especially for the frame table, called ft_lock. If two processes need 
+a new frame they have to call frame_table_insert. At the beginning of this 
+function we acquire the lock for ft_lock and we release it at the end. 
+The first process, which reaches the function will hold the lock create a 
+frame table entry and release it. Afterwards the other process can create 
+his entry.
+
 
 ---- RATIONALE ----
 
@@ -58,10 +110,25 @@ FirstName LastName <email@domain.example>
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Extensions of vm/swap.c:
+static struct lock swap_lock;		// Avoid race conditions on swap block
+static struct block *swap_block;	// Block with swap pages
+static struct bitmap *swap_bitmap;	// Bitmap to check if swap page is free or not
+
+static int sectors_per_page;		// Number of sector per page: 
+									// PGSIZE / BLOCK_SECTOR_SIZE
+
+
 ---- ALGORITHMS ----
 
 >> B2: When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
+
+We have implemented a simple version of the last recently used algorithm. 
+Every time a page is loaded, we set a spte entry local variable lru_ticks 
+to the actual number of ticks. If a frame should be evicted, we iterate 
+over the list of frames and lock for the one with the lowest lru_ticks 
+number. This happens over the pointer to spte, where the number is stored.
 
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
@@ -71,6 +138,14 @@ FirstName LastName <email@domain.example>
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
 
+PUSH and PUSHA are two functions used to push data on the stack. PUSH 
+may cause a page fault on address "stack pointer - 4" and PUSHA on 
+"stack pointer - 32". So, if there is no entry in the supplemental 
+page table for address A and A is above or equal "stack pointer -32", 
+we know that this should cause the stack to grow. This is possible until 
+the maximal stack size, which is 8MB.
+
+
 ---- SYNCHRONIZATION ----
 
 >> B5: Explain the basics of your VM synchronization design.  In
@@ -78,21 +153,48 @@ FirstName LastName <email@domain.example>
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
 
+In our synchronization design is based on locks and on a supplemental
+page table entry flag called pinned, as explained in section 
+4.3.5 Accessing User Memory of the documentation. 
+Different locks are used for file accesses, the frame table and the 
+swap table. 
+The pinned flag is set every time a page is loaded, accessed or created. 
+
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
+
+Everytime a frame is used, in any way, by its owner the pinned flag is 
+set to true. This has some affects for eviction algorithm. While 
+iterating over the frame table, we check if the pinned flag of the 
+corresponding supplemental page table entry is set. If so, we skip this 
+frame in our eviction process. 
+This means there is no chance for P to evict Q's frame and on the other 
+hand Q will not fault and get the page back in.
 
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
 
+Similar to the last question B6, we handle this case with our pinned 
+flag. At the very beginning of our load_page function, we set pinned 
+to true and thus the eviction algorithm used by Q will skip the page 
+and there will be no interferes. 
+
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
 >> in user programs), or do you have a mechanism for "locking" frames
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
+
+As stated in the question above, we bring in pages by using page faults. 
+If a page fault occures, we check if an entry in the supplemental page 
+table exists, if so we try to load the page back in. The locking mechanism 
+is done by pinned flag, which is set in this case to true by default. 
+Invalid virtual addresses are checked at the beginning and lead to an 
+exit(-1).
 
 ---- RATIONALE ----
 
@@ -102,6 +204,18 @@ FirstName LastName <email@domain.example>
 >> possibility for deadlock but allows for high parallelism.  Explain
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
+
+As mentioned above we use 3 different kinds of locks, file access, 
+swap table and frame table. All of these locks are used to avoid race 
+conditions on resources, that are used by multiple threads in the system.
+The file lock is mostly used within the system calls, as well as loading 
+files. Locking the swap block is necessary, because different processes 
+may evict frames at the same time. The frame table is global, like the 
+swap table and thus accessed by many processes which requires a lock.
+
+Futhermore we use the pinned flag to ensure, that pages are not evicted 
+as long as they are needed. 
+
 
 			 MEMORY MAPPED FILES
 			 ===================
