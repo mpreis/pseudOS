@@ -36,6 +36,7 @@
 #include "devices/ide.h"
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
+#include "filesys/cache.h"  /* pseudOS */
 #endif
 
 /* Page directory with kernel mappings only. */
@@ -120,6 +121,8 @@ main (void)
   serial_init_queue ();
   timer_calibrate ();
   
+  cache_init (); /* pseudOS */
+
 #ifdef FILESYS
   /* Initialize file system. */
   ide_init ();
