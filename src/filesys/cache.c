@@ -48,6 +48,11 @@ cache_init_entry (struct cache_entry_t *ce)
 	memset (ce->buffer, 0, BLOCK_SECTOR_SIZE);
 }
 
+void
+cache_write_sector (void *buffer, block_sector_t sector_idx)
+{
+	cache_write (buffer, sector_idx, 0, BLOCK_SECTOR_SIZE, 0);	
+}
 
 void 
 cache_write (void *buffer, block_sector_t sector_idx, int sector_ofs, 
@@ -58,6 +63,12 @@ cache_write (void *buffer, block_sector_t sector_idx, int sector_ofs,
 		ce = cache_load (sector_idx);
 	ce->dirty = true;
 	memcpy (ce->buffer + sector_ofs, buffer + bytes_written, chunk_size);
+}
+
+void
+cache_read_sector (void *buffer, block_sector_t sector_idx)
+{
+	cache_read (buffer, sector_idx, 0, BLOCK_SECTOR_SIZE, 0);	
 }
 
 void 
