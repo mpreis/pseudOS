@@ -21,6 +21,7 @@ struct cache_entry_t
 };
 
 void cache_init (void);
+void cache_flush (void);
 
 void cache_write_sector (void *buffer, block_sector_t sector_idx);
 void cache_write (void *buffer, block_sector_t sector_idx, int sector_ofs, 

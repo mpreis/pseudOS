@@ -87,6 +87,23 @@ cache_read (void *buffer, block_sector_t sector_idx, int sector_ofs,
 		thread_create ("cache_read_ahead", PRI_DEFAULT, &cache_read_ahead, (void *)sector_idx_next);
 }
 
+void
+cache_flush (void)
+{
+	struct list_elem *e;
+	lock_acquire (&cache_used_lock);
+	for (e = list_begin (&cache_used); e != list_end (&cache_used); e = list_next (e))
+	{
+		struct cache_entry_t *ce = list_entry (e, struct cache_entry_t, elem);
+		if (ce->dirty)
+		{
+			block_write (fs_device, ce->sector_idx, ce->buffer);
+			ce->dirty = false;
+		}
+	}
+	lock_release (&cache_used_lock);
+}
+
 static struct cache_entry_t *
 cache_lookup (block_sector_t sector_idx)
 {
@@ -142,18 +159,9 @@ cache_evict (void)
 static void 
 cache_write_behind (void *aux UNUSED)
 {
-	struct list_elem *e;
 	while (true)
 	{
-		for (e = list_begin (&cache_used); e != list_end (&cache_used); e = list_next (e))
-		{
-			struct cache_entry_t *ce = list_entry (e, struct cache_entry_t, elem);
-			if (ce->dirty)
-			{
-				block_write (fs_device, ce->sector_idx, ce->buffer);
-				ce->dirty = false;
-			}
-		}
+		cache_flush ();
 		timer_sleep (CACHE_WRITE_BEHIND_PERIOD);
 	}
 }
