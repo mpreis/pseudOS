@@ -128,11 +128,9 @@ cache_load (block_sector_t sector_idx)
 	lock_release (&cache_free_lock);
 	
 	struct cache_entry_t *ce = list_entry (e, struct cache_entry_t, elem);
-	//? lock_acquire (&ce->lock);
 	ce->sector_idx = sector_idx;
 	ce->accessed = true;
 	block_read (fs_device, sector_idx, ce->buffer);
-	//? lock_release (&ce->lock);
 	
 	lock_acquire (&cache_used_lock);
 	list_push_back (&cache_used, &ce->elem);
@@ -150,7 +148,10 @@ cache_evict (void)
 	
 	struct cache_entry_t *ce = list_entry (e, struct cache_entry_t, elem);
 	if (ce->dirty)
+	{
 		block_write (fs_device, ce->sector_idx, ce->buffer);
+		cache_flush ();
+	}
 
 	cache_init_entry (ce);
 	list_push_back (&cache_free, &ce->elem);
