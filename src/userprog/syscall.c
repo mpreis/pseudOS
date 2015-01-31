@@ -140,7 +140,44 @@ syscall_handler (struct intr_frame *f)
 			else
 				exit (-1);
 			break;
+	
+		case SYS_CHDIR: 
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
+				f->eax = chdir ( *(int *)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
+			break;
 
+		case SYS_MKDIR: 
+			if( is_user_vaddr((char **)(f->esp + OFFSET_ARG)) )
+				f->eax = mkdir ( *(char **)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
+			break;
+
+		case SYS_READDIR: 
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG))
+				&& is_user_vaddr((char **)(f->esp + OFFSET_ARG)) )
+				f->eax = readdir ( 
+					(int *)(f->esp + OFFSET_ARG),
+					*(char **)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
+			break;
+
+		case SYS_ISDIR: 
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
+				f->eax = isdir ( *(int *)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
+			break;
+
+		case SYS_INUMBER: 
+			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
+				f->eax = inumber ( *(int *)(f->esp + OFFSET_ARG) );
+			else
+				exit (-1);
+			break;
 		default:
 			exit (-1);         
 	}
@@ -398,6 +435,36 @@ close (int fd)
 	file_close ( thread_current ()->fds[fd - FD_INIT] );
 	thread_current ()->fds[fd - FD_INIT] = NULL;
 	lock_release (&syscall_lock);
+}
+
+bool 
+chdir (const char *dir)
+{
+	return false;
+}
+
+bool 
+mkdir (const char *dir)
+{
+	return false;
+}
+
+bool 
+readdir (int fd, char *name)
+{
+	return false;
+}
+
+bool 
+isdir (int fd)
+{
+	return false;
+}
+
+int 
+inumber (int fd)
+{
+	return -1;
 }
 
 /* 

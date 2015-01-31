@@ -9,8 +9,6 @@ static struct list cache_used;
 static struct list cache_free;
 
 static struct lock cache_global_lock;
-// static struct lock cache_used_lock;
-// static struct lock cache_free_lock;
 
 static void cache_write_behind (void *aux UNUSED);
 static void cache_read_ahead (void *aux);
@@ -26,8 +24,6 @@ cache_init (void)
 	list_init (&cache_used);
 	list_init (&cache_free);
 
-	// lock_init (&cache_used_lock);
-	// lock_init (&cache_free_lock);
 	lock_init (&cache_global_lock);
 
 	unsigned i;
@@ -93,7 +89,6 @@ cache_read (void *buffer, block_sector_t sector_idx, int sector_ofs,
 void
 cache_flush (void)
 {
-	// lock_acquire (&cache_used_lock);
 	struct list_elem *e;
 	for (e = list_begin (&cache_used); e != list_end (&cache_used); e = list_next (e))
 	{
@@ -104,7 +99,6 @@ cache_flush (void)
 			ce->dirty = false;
 		}
 	}
-	// lock_release (&cache_used_lock);
 }
 
 static struct cache_entry_t *
@@ -123,31 +117,22 @@ cache_lookup (block_sector_t sector_idx)
 static struct cache_entry_t *
 cache_load (block_sector_t sector_idx)
 {
-	// lock_acquire (&cache_free_lock);
 	if(list_empty (&cache_free))
 		cache_evict ();
 
 	struct list_elem *e = list_pop_front (&cache_free);
-	// lock_release (&cache_free_lock);
-	
 	struct cache_entry_t *ce = list_entry (e, struct cache_entry_t, elem);
 	ce->sector_idx = sector_idx;
 	ce->accessed = true;
 	block_read (fs_device, sector_idx, ce->buffer);
-	
-	// lock_acquire (&cache_used_lock);
 	list_push_back (&cache_used, &ce->elem);
-	// lock_release (&cache_used_lock);
-	
 	return ce;
 }
 
 static void
 cache_evict (void)
 {
-	// lock_acquire (&cache_used_lock);
 	struct list_elem *e = list_pop_front (&cache_used);
-	// lock_release (&cache_used_lock);
 	
 	struct cache_entry_t *ce = list_entry (e, struct cache_entry_t, elem);
 	if (ce->dirty)
