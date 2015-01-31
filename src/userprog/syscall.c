@@ -8,6 +8,8 @@
 #include "devices/input.h"
 #include "filesys/filesys.h"
 #include "filesys/file.h"
+#include "filesys/inode.h"
+#include "filesys/directory.h"
 #include "pagedir.h"
 #include "process.h"
 #include <stdio.h>
@@ -142,8 +144,8 @@ syscall_handler (struct intr_frame *f)
 			break;
 	
 		case SYS_CHDIR: 
-			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG)) )
-				f->eax = chdir ( *(int *)(f->esp + OFFSET_ARG) );
+			if( is_user_vaddr((char **)(f->esp + OFFSET_ARG)) )
+				f->eax = chdir ( *(char **)(f->esp + OFFSET_ARG) );
 			else
 				exit (-1);
 			break;
@@ -157,10 +159,10 @@ syscall_handler (struct intr_frame *f)
 
 		case SYS_READDIR: 
 			if( is_user_vaddr((int *)(f->esp + OFFSET_ARG))
-				&& is_user_vaddr((char **)(f->esp + OFFSET_ARG)) )
+				&& is_user_vaddr((char **)(f->esp + OFFSET_ARG * 2)) )
 				f->eax = readdir ( 
-					(int *)(f->esp + OFFSET_ARG),
-					*(char **)(f->esp + OFFSET_ARG) );
+					*(int *)(f->esp + OFFSET_ARG),
+					*(char **)(f->esp + OFFSET_ARG * 2) );
 			else
 				exit (-1);
 			break;
@@ -254,7 +256,7 @@ create (const char *file, unsigned initial_size)
  		exit(-1);
 	
 	lock_acquire (&syscall_lock);
-	bool b = filesys_create (file, initial_size); 
+	bool b = filesys_create (file, initial_size, false); 
 	lock_release (&syscall_lock);
 	return b;
 }
@@ -446,25 +448,64 @@ chdir (const char *dir)
 bool 
 mkdir (const char *dir)
 {
-	return false;
+	return filesys_create (dir, 0, true);
 }
 
 bool 
 readdir (int fd, char *name)
 {
+	if( ! isdir (fd) )
+		return -1;
+	
+	struct file *file = thread_current ()->fds[fd - FD_INIT];
+	if(!file)
+		return -1;
+
+	struct dir *dir = malloc (sizeof(struct dir));
+	dir->inode = file->inode;
+	dir->pos = file->pos;
+	
+	if(dir_readdir (dir, name))
+	{
+		file->pos = dir->pos;
+		return true;
+	}
+
 	return false;
 }
 
 bool 
 isdir (int fd)
 {
-	return false;
+	if( ! is_valid_fd(fd))
+		return -1;
+	
+	struct file *file = thread_current ()->fds[fd - FD_INIT];
+	if(!file)
+		return -1;
+
+	struct inode *inode = file_get_inode (file);
+	if(!inode)
+		return -1;
+
+	return inode_get_is_dir (inode);
 }
 
 int 
 inumber (int fd)
 {
-	return -1;
+	if( ! is_valid_fd(fd))
+		return -1;
+	
+	struct file *file = thread_current ()->fds[fd - FD_INIT];
+	if(!file)
+		return -1;
+
+	struct inode *inode = file_get_inode (file);
+	if(!inode)
+		return -1;
+
+	return inode_get_inumber (inode);
 }
 
 /* 

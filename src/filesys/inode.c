@@ -339,6 +339,12 @@ inode_get_inumber (const struct inode *inode)
   return inode->sector;
 }
 
+bool 
+inode_get_is_dir (const struct inode *inode)
+{
+  return inode->is_dir;
+}
+
 static void
 inode_free_sectors (struct inode *inode)
 {

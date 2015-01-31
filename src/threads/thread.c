@@ -108,6 +108,7 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->cwd = NULL;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -259,6 +260,10 @@ thread_create (const char *name, int priority,
   sema_init (&t->child_info->init, 1);
   sema_down (&t->child_info->init); /* pseudOS */
   list_push_back (&thread_current ()->childs, &t->child_info->childelem);
+
+  t->cwd = (thread_current ()->cwd) 
+    ? dir_reopen (thread_current ()->cwd) 
+    : NULL;
 
   intr_set_level (old_level);
   

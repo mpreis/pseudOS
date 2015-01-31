@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 
+#include "filesys/directory.h"
 #include "synch.h"
 
 
@@ -127,6 +128,9 @@ struct thread
     struct list childs;                     /* pseudOS: List of children of this thread. */
     struct child_process* child_info;       /* pseudOS: Holds information of this thread. */ 
     struct file* executable;                /* pseudOS: Represents the executable which is executed by this thread.*/
+
+    /* pseudOS: Project 4 */
+    struct dir *cwd;
   };
 
 /* If false (default), use round-robin scheduler.

@@ -81,6 +81,9 @@ start_process (void *file_name_)
   if (!success) 
     thread_exit ();
 
+  if (!thread_current ()->cwd)
+    thread_current ()->cwd = dir_open_root ();
+
   sema_up (&thread_current ()->child_info->init);
   
   /* Start the user process by simulating a return from an
@@ -123,6 +126,9 @@ process_exit (void)
   int i;
   for(i = 0; i < FD_ARR_DEFAULT_LENGTH; i++)
     close(i);
+
+  if (cur->cwd)
+    dir_close (cur->cwd);
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
