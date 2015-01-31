@@ -26,7 +26,8 @@ struct inode_disk
   block_sector_t single_indirect;           /* 128 * BLOCK_SECTOR_SIZE = 65536 bytes. */
   block_sector_t double_indirect;           /* 128 * 128 * BLOCK_SECTOR_SIZE = 8388608 bytes. */
   unsigned magic;                           /* Magic number. */
-  uint32_t unused [NR_OF_INDIRECT - NR_OF_DIRECT - 4];
+  bool is_dir;
+  uint32_t unused [NR_OF_INDIRECT - NR_OF_DIRECT - 5];
 };
 
 /* Returns the number of sectors to allocate for an inode SIZE
@@ -46,6 +47,7 @@ struct inode
     bool removed;                         /* True if deleted, false otherwise. */
     int deny_write_cnt;                   /* 0: writes ok, >0: deny writes. */
 
+    bool is_dir;
     off_t length;                         /* File size in bytes. */
     block_sector_t direct[NR_OF_DIRECT];  /* 12 * BLOCK_SECTOR_SIZE = 6144 bytes. */
     block_sector_t single_indirect;       /* 128 * BLOCK_SECTOR_SIZE = 65536 bytes. */
@@ -223,7 +225,7 @@ inode_init (void)
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
 bool
-inode_create (block_sector_t sector, off_t length)
+inode_create (block_sector_t sector, off_t length, bool is_dir)
 {
   struct inode_disk *disk_inode = NULL;
   bool success = false;
@@ -238,17 +240,20 @@ inode_create (block_sector_t sector, off_t length)
   if (disk_inode != NULL)
   {
     disk_inode->length = length;
+    disk_inode->is_dir = is_dir;
     disk_inode->magic = INODE_MAGIC;
 
     struct inode *inode;
     inode = malloc (sizeof *inode);
     if (inode == NULL) return false;
     inode->sector = sector;
+    inode->is_dir = is_dir;
     inode->open_cnt = 1;
     inode->deny_write_cnt = 0;
     inode->removed = false;
     inode->length = 0;
 
+    // dummy write, to expand the inode to the given length
     char *tmp = "d";
     inode_write_at(inode, tmp, 1, disk_inode->length);
 
@@ -308,6 +313,7 @@ inode_open (block_sector_t sector)
     cache_read_sector (disk_inode, inode->sector);
     inode->length = disk_inode->length;
 
+    inode->is_dir = disk_inode->is_dir;
     inode->single_indirect = disk_inode->single_indirect;
     inode->double_indirect = disk_inode->double_indirect;
     memcpy (&inode->direct, &disk_inode->direct, NR_OF_DIRECT * sizeof (block_sector_t));
