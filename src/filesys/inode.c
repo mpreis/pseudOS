@@ -11,7 +11,7 @@
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
-#define NR_OF_DIRECT 20
+#define NR_OF_DIRECT 12
 #define NR_OF_INDIRECT 128
 #define MAX_FILE_SECTORS NR_OF_DIRECT + NR_OF_INDIRECT + NR_OF_INDIRECT * NR_OF_INDIRECT
 #define SECTOR_FAILED -1
@@ -100,13 +100,13 @@ inode_allocate_ind_sectors (block_sector_t sector, int old_idx, int new_idx, int
   if(old_idx <= bound)
   {
     free_map_allocate (1, &sector);
-    old_idx = bound - 1;
+    old_idx = bound;
   }
 
   block_sector_t single_indirect[NR_OF_INDIRECT];
   cache_read_sector (single_indirect, sector);
 
-  for (i = old_idx - (bound - 1); 
+  for (i = old_idx - bound; 
        i < (new_idx - bound) && i < NR_OF_INDIRECT; i++)
   {
     block_sector_t tmp_sector_idx;
@@ -128,16 +128,16 @@ inode_allocate_d_ind_sectors (struct inode *inode, int old_idx,
   if(old_idx <= bound)
   {
     free_map_allocate (1, &sector);
-    old_idx = bound - 1;
+    old_idx = bound;
   }
 
   block_sector_t double_indirect[NR_OF_INDIRECT];
   cache_read_sector (double_indirect, sector);
   
   int new_d_ind_idx = new_idx;
-  int next_d_ind_idx = old_idx + 1;
+  int next_d_ind_idx = old_idx;
 
-  for (i = 0; next_d_ind_idx < new_d_ind_idx && i < NR_OF_INDIRECT; i++)
+  for (i = old_idx - bound; next_d_ind_idx < new_d_ind_idx && i < NR_OF_INDIRECT; i++)
   {
     double_indirect[i] = inode_allocate_ind_sectors (inode->sector, next_d_ind_idx, new_d_ind_idx, 
                           NR_OF_DIRECT + NR_OF_INDIRECT + i * NR_OF_INDIRECT);
@@ -232,8 +232,7 @@ inode_create (block_sector_t sector, off_t length)
 
   /* If this assertion fails, the inode structure is not exactly
      one sector in size, and you should fix that. */
-  // ASSERT (sizeof *disk_inode == BLOCK_SECTOR_SIZE);
-  //   printf("\n --- inode_create: sector: %d length: %d \n", sector, length);
+  ASSERT (sizeof *disk_inode == BLOCK_SECTOR_SIZE);
 
   disk_inode = calloc (1, sizeof *disk_inode);
   if (disk_inode != NULL)
