@@ -271,6 +271,7 @@ remove (const char *file)
  		exit(-1);
 
 	lock_acquire (&syscall_lock);
+	/* TODO: Clear empty directories */
 	bool b = filesys_remove (file);
 	lock_release (&syscall_lock);
   return b;
@@ -448,6 +449,7 @@ chdir (const char *dir)
 bool 
 mkdir (const char *dir)
 {
+	/* TODO: handle file/dir names */
 	return filesys_create (dir, 0, true);
 }
 
@@ -455,11 +457,9 @@ bool
 readdir (int fd, char *name)
 {
 	if( ! isdir (fd) )
-		return -1;
+		return false;
 	
 	struct file *file = thread_current ()->fds[fd - FD_INIT];
-	if(!file)
-		return -1;
 
 	struct dir *dir = malloc (sizeof(struct dir));
 	dir->inode = file->inode;
@@ -477,16 +477,16 @@ readdir (int fd, char *name)
 bool 
 isdir (int fd)
 {
-	if( ! is_valid_fd(fd))
-		return -1;
+	if(!is_valid_fd(fd))
+		return false;
 	
 	struct file *file = thread_current ()->fds[fd - FD_INIT];
 	if(!file)
-		return -1;
+		return false;
 
 	struct inode *inode = file_get_inode (file);
 	if(!inode)
-		return -1;
+		return false;
 
 	return inode_get_is_dir (inode);
 }

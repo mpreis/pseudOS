@@ -7,11 +7,13 @@
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "filesys/cache.h"
+#include "threads/malloc.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
 
 static void do_format (void);
+static char * filesys_get_filename (const char *filepath);
 
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
@@ -102,4 +104,24 @@ do_format (void)
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");
+}
+
+static char * 
+filesys_get_filename (const char *filepath)
+{
+  int length = strlen(filepath) + 1;
+  char *filepath_copy = malloc (length);
+  strlcpy (filepath_copy, filepath, length);
+
+  char *save_ptr, *last_token, *token;
+  for (token = strtok_r (filepath_copy, "/", &save_ptr); token != NULL;
+       token = strtok_r (NULL, "/", &save_ptr))
+    last_token = token;
+
+  int filename_length = strlen (last_token) + 1;
+  char *filename = malloc (filename_length);
+  strlcpy (last_token, filename, filename_length);
+
+  free (filepath_copy);
+  return filename;
 }

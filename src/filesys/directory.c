@@ -5,6 +5,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* A single directory entry. */
 struct dir_entry 
@@ -226,4 +227,39 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
         } 
     }
   return false;
+}
+
+
+struct dir *
+dir_get_dir (const char *filepath)
+{
+  struct dir *dir;
+  struct inode *inode;
+  int length = strlen(filepath) + 1;
+  char *filepath_copy = malloc (length);
+  strlcpy (filepath_copy, filepath, length);
+
+  char *save_ptr, *token;
+
+  // check absolute or relative path
+  dir = (filepath_copy[0] == '/') // TODO: cwd != NULL?
+        ? dir_open_root ()
+        : dir_reopen (thread_current ()->cwd);
+
+  for (token = strtok_r (filepath_copy, "/", &save_ptr); token != NULL;
+       token = strtok_r (NULL, "/", &save_ptr))
+  {
+    if(dir_lookup (dir, token, &inode))
+    {
+      dir_close (dir);
+      dir = dir_open (inode);
+    }
+    else
+    {
+      dir_close (dir);
+      return NULL;
+    }
+  }
+
+  return dir;
 }
