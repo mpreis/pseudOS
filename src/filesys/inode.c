@@ -158,20 +158,22 @@ inode_allocate_sectors (struct inode *inode, off_t pos)
   int old_idx = (inode->length == 0) ? -1 : DIV_ROUND_UP (inode->length, BLOCK_SECTOR_SIZE) - 1;
   int next_free_idx = old_idx + 1;
 
-  /* There should be enough space on the last sector. */
-  if (next_free_idx == new_idx)
-  {
-    inode->length = pos;  // update acutal length 
-    return sector_idx;
-  }
-
-  ASSERT(old_idx < new_idx);
-
   struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
   disk_inode->magic = INODE_MAGIC;
   disk_inode->length = inode->length;
   disk_inode->single_indirect = inode->single_indirect;
   disk_inode->double_indirect = inode->double_indirect;
+
+  /* There should be enough space on the last sector. */
+  if (next_free_idx == new_idx)
+  {
+    inode->length = pos;  // update acutal length 
+    disk_inode->length = pos;
+    cache_write_sector (disk_inode, inode->sector);
+    return sector_idx;
+  }
+
+  ASSERT(old_idx < new_idx);
 
   if (old_idx < NR_OF_DIRECT)
   {
@@ -199,6 +201,7 @@ inode_allocate_sectors (struct inode *inode, off_t pos)
                                                                 NR_OF_DIRECT + NR_OF_INDIRECT);
   }
 
+  disk_inode->length = pos;
   inode->length = pos;
   inode->single_indirect = disk_inode->single_indirect;
   inode->double_indirect = disk_inode->double_indirect;
@@ -227,6 +230,7 @@ inode_init (void)
 bool
 inode_create (block_sector_t sector, off_t length, bool is_dir)
 {
+
   struct inode_disk *disk_inode = NULL;
   bool success = false;
 
@@ -399,7 +403,6 @@ inode_close (struct inode *inode)
   /* Ignore null pointer. */
   if (inode == NULL)
     return;
-
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
   {
@@ -408,7 +411,22 @@ inode_close (struct inode *inode)
 
     /* Deallocate blocks if removed. */
     if (inode->removed) 
+    {
       inode_free_sectors(inode);
+    }
+
+/* TODO: totally ugly workaround for synchronisation problem */
+    struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
+    disk_inode->magic = INODE_MAGIC;
+    disk_inode->length = inode->length;
+
+    int i;
+    for (i = 0; i < NR_OF_DIRECT; ++i)
+      disk_inode->direct[i] = inode->direct[i];
+
+    disk_inode->single_indirect = inode->single_indirect;
+    disk_inode->double_indirect = inode->double_indirect;
+    cache_write_sector (disk_inode, inode->sector);
 
     free (inode); 
   }

@@ -82,7 +82,7 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
     if (!inode_create (inode_sector, initial_size, is_dir))
       return false;
   }
-  bool tmp = dir_add (dir, filename, inode_sector);
+  dir_add (dir, filename, inode_sector);
 
   inode_close (tmp_inode);
   dir_close (dir);
@@ -103,7 +103,9 @@ filesys_open (const char *name)
   char *path, *filename;
   filesys_split_filepath (name, &path, &filename);
 
-  struct dir *dir = dir_get_dir (path);
+  struct dir *dir = (path == NULL)
+                    ? dir_reopen (thread_current ()->cwd)
+                    : dir_get_dir (path);
   struct inode *inode = NULL;
 
   if (dir != NULL)

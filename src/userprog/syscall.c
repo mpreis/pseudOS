@@ -444,21 +444,29 @@ close (int fd)
 bool 
 chdir (const char *dir)
 {
+ 	lock_acquire (&syscall_lock);
 	struct dir *new_dir = dir_get_dir (dir);
 
 	if(new_dir == NULL)
+	{
+ 		lock_release (&syscall_lock);
 		return false;
+	}
 
 	dir_close (thread_current ()->cwd);
 	thread_current ()->cwd = new_dir;
 
+ 	lock_release (&syscall_lock);
 	return true;
 }
 
 bool 
 mkdir (const char *dir)
 {
-	return filesys_create (dir, 0, true);
+ 	lock_acquire (&syscall_lock);
+	bool success = filesys_create (dir, 0, true);
+ 	lock_release (&syscall_lock);
+	return success;
 }
 
 bool 
@@ -467,6 +475,7 @@ readdir (int fd, char *name)
 	if( ! isdir (fd) )
 		return false;
 	
+ 	lock_acquire (&syscall_lock);
 	struct file *file = thread_current ()->fds[fd - FD_INIT];
 
 	struct dir *dir = malloc (sizeof(struct dir));
@@ -476,8 +485,10 @@ readdir (int fd, char *name)
 	if(dir_readdir (dir, name))
 	{
 		file->pos = dir->pos;
+ 		lock_release (&syscall_lock);
 		return true;
 	}
+ 	lock_release (&syscall_lock);
 
 	return false;
 }
@@ -488,14 +499,22 @@ isdir (int fd)
 	if(!is_valid_fd(fd))
 		return false;
 	
+ 	lock_acquire (&syscall_lock);
 	struct file *file = thread_current ()->fds[fd - FD_INIT];
 	if(!file)
+	{
+ 		lock_release (&syscall_lock);
 		return false;
+	}
 
 	struct inode *inode = file_get_inode (file);
 	if(!inode)
+	{
+ 		lock_release (&syscall_lock);
 		return false;
+	}
 
+ 	lock_release (&syscall_lock);
 	return inode_get_is_dir (inode);
 }
 
@@ -505,13 +524,22 @@ inumber (int fd)
 	if( ! is_valid_fd(fd))
 		return -1;
 	
+ 	lock_acquire (&syscall_lock);
 	struct file *file = thread_current ()->fds[fd - FD_INIT];
 	if(!file)
+	{
+	 	lock_release (&syscall_lock);
 		return -1;
+	}
 
 	struct inode *inode = file_get_inode (file);
 	if(!inode)
+	{
+	 	lock_release (&syscall_lock);
 		return -1;
+	}
+
+ 	lock_release (&syscall_lock);
 
 	return inode_get_inumber (inode);
 }
