@@ -81,9 +81,6 @@ start_process (void *file_name_)
   if (!success) 
     thread_exit ();
 
-  if (!thread_current ()->cwd)
-    thread_current ()->cwd = dir_open_root ();
-
   sema_up (&thread_current ()->child_info->init);
   
   /* Start the user process by simulating a return from an

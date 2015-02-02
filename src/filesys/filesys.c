@@ -8,12 +8,13 @@
 #include "filesys/directory.h"
 #include "filesys/cache.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* Partition that contains the file system. */
 struct block *fs_device;
 
 static void do_format (void);
-static char * filesys_get_filename (const char *filepath);
+static void filesys_split_filepath (const char *filepath, char **path, char **name);
 
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
@@ -31,6 +32,8 @@ filesys_init (bool format)
     do_format ();
 
   free_map_open ();
+
+  thread_current ()->cwd = dir_open_root ();
 }
 
 /* Shuts down the file system module, writing any unwritten data
@@ -49,7 +52,44 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size, bool is_dir) 
 {
+  if(name == NULL || strlen (name) == 0 || strlen (name) > NAME_MAX)
+    return false;
+
   block_sector_t inode_sector = 0;
+  char *path, *filename;
+  filesys_split_filepath (name, &path, &filename);
+
+  struct dir *dir = (path == NULL)
+    ? dir_reopen (thread_current ()->cwd)
+    : dir_get_dir (path);
+
+  struct inode *dir_inode = dir_get_inode (dir);  
+  struct inode *tmp_inode;
+  
+  if (dir == NULL || dir_lookup (dir, filename, &tmp_inode))
+    return false;
+
+  if (!free_map_allocate (1, &inode_sector))
+    return false;
+
+  if (is_dir)
+  {
+    if (!dir_create (inode_sector, inode_get_inumber (dir_inode), initial_size))
+      return false;
+  }
+  else
+  {
+    if (!inode_create (inode_sector, initial_size, is_dir))
+      return false;
+  }
+  dir_add (dir, filename, inode_sector);
+
+  inode_close (tmp_inode);
+  dir_close (dir);
+  return true;
+/*
+
+
   struct dir *dir = dir_open_root ();
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
@@ -60,6 +100,7 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
   dir_close (dir);
 
   return success;
+  */
 }
 
 /* Opens the file with the given NAME.
@@ -93,35 +134,52 @@ filesys_remove (const char *name)
 
   return success;
 }
-
+
 /* Formats the file system. */
 static void
 do_format (void)
 {
   printf ("Formatting file system...");
   free_map_create ();
-  if (!dir_create (ROOT_DIR_SECTOR, 16))
+  if (!dir_create (ROOT_DIR_SECTOR, ROOT_DIR_SECTOR, 16))
     PANIC ("root directory creation failed");
   free_map_close ();
   printf ("done.\n");
 }
 
-static char * 
-filesys_get_filename (const char *filepath)
+
+static void
+filesys_split_filepath (const char *filepath, char **path, char **name)
 {
-  int length = strlen(filepath) + 1;
-  char *filepath_copy = malloc (length);
-  strlcpy (filepath_copy, filepath, length);
+  int fp_length = strlen (filepath);
+  char *fp_copy = malloc (fp_length + 1);
+  strlcpy (fp_copy, filepath, fp_length + 1);
 
-  char *save_ptr, *last_token, *token;
-  for (token = strtok_r (filepath_copy, "/", &save_ptr); token != NULL;
-       token = strtok_r (NULL, "/", &save_ptr))
-    last_token = token;
+  if (fp_copy[fp_length] == '/')
+    fp_copy[fp_length] = '\0';
 
-  int filename_length = strlen (last_token) + 1;
-  char *filename = malloc (filename_length);
-  strlcpy (last_token, filename, filename_length);
+  char *last_sep_pos = strrchr (fp_copy, '/');
+  if (last_sep_pos == NULL)
+  {
+    *path = "";
+    *name = malloc (fp_length + 1);
+    strlcpy (*name, fp_copy, fp_length + 1);
+  }
+  else if (last_sep_pos == fp_copy)
+  {
+    *path = "/";
+    *name = malloc (fp_length);
+    strlcpy (*name, fp_copy + sizeof(char), fp_length);
+  }
+  else
+  {
+    unsigned path_length = last_sep_pos - fp_copy;
+    *path = malloc (path_length + 1);
+    strlcpy (*path, fp_copy, path_length + 1);
 
-  free (filepath_copy);
-  return filename;
+    unsigned name_length = fp_length - path_length;
+    *name = malloc (name_length + 1);
+    strlcpy (*name, last_sep_pos + 1, name_length + 1);
+  }
+  free (fp_copy);
 }

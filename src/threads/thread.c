@@ -216,7 +216,6 @@ thread_create (const char *name, int priority,
   struct switch_entry_frame *ef;
   struct switch_threads_frame *sf;
   tid_t tid;
-  //printf("thread_create start\n");
   enum intr_level old_level;
 
   ASSERT (function != NULL);
@@ -229,6 +228,10 @@ thread_create (const char *name, int priority,
   /* Initialize thread. */
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
+
+  t->cwd = (thread_current ()->cwd)
+    ? dir_reopen (thread_current ()->cwd)
+    : NULL;
 
   old_level = intr_disable ();
   
@@ -247,6 +250,7 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+
   struct child_process *cp = malloc(sizeof(struct child_process));
   cp->pid = t->tid;
   cp->parent = thread_current ();
@@ -261,9 +265,6 @@ thread_create (const char *name, int priority,
   sema_down (&t->child_info->init); /* pseudOS */
   list_push_back (&thread_current ()->childs, &t->child_info->childelem);
 
-  t->cwd = (thread_current ()->cwd) 
-    ? dir_reopen (thread_current ()->cwd) 
-    : NULL;
 
   intr_set_level (old_level);
   
