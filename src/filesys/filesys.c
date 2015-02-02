@@ -52,7 +52,7 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size, bool is_dir) 
 {
-  if(name == NULL || strlen (name) == 0 || strlen (name) > NAME_MAX)
+  if (name == NULL || strlen (name) == 0 || strlen (name) > NAME_MAX)
     return false;
 
   block_sector_t inode_sector = 0;
@@ -82,25 +82,11 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
     if (!inode_create (inode_sector, initial_size, is_dir))
       return false;
   }
-  dir_add (dir, filename, inode_sector);
+  bool tmp = dir_add (dir, filename, inode_sector);
 
   inode_close (tmp_inode);
   dir_close (dir);
   return true;
-/*
-
-
-  struct dir *dir = dir_open_root ();
-  bool success = (dir != NULL
-                  && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size, is_dir)
-                  && dir_add (dir, name, inode_sector));
-  if (!success && inode_sector != 0) 
-    free_map_release (inode_sector, 1);
-  dir_close (dir);
-
-  return success;
-  */
 }
 
 /* Opens the file with the given NAME.
@@ -111,14 +97,26 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
 struct file *
 filesys_open (const char *name)
 {
-  struct dir *dir = dir_open_root ();
+  if (name == NULL || strlen (name) == 0 || strlen (name) > NAME_MAX)
+    return NULL;
+
+  char *path, *filename;
+  filesys_split_filepath (name, &path, &filename);
+
+  struct dir *dir = dir_get_dir (path);
   struct inode *inode = NULL;
 
   if (dir != NULL)
-    dir_lookup (dir, name, &inode);
-  dir_close (dir);
+  {
+    if (strcmp (filename, "") == 0)
+      return file_open (dir->inode);
 
-  return file_open (inode);
+    dir_lookup (dir, filename, &inode);
+
+    dir_close (dir);
+    return file_open (inode);
+  }
+  return NULL;
 }
 
 /* Deletes the file named NAME.

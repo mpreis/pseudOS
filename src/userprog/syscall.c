@@ -286,9 +286,10 @@ open (const char *file)
 {
  	if( ! is_valid_usr_ptr (file, 0) ) 
  		exit(-1);
-	
+
  	lock_acquire (&syscall_lock);
 	struct file *f = filesys_open (file);
+
 	if(f)
 	{
 		struct thread *t = thread_current ();
@@ -443,13 +444,20 @@ close (int fd)
 bool 
 chdir (const char *dir)
 {
-	return false;
+	struct dir *new_dir = dir_get_dir (dir);
+
+	if(new_dir == NULL)
+		return false;
+
+	dir_close (thread_current ()->cwd);
+	thread_current ()->cwd = new_dir;
+
+	return true;
 }
 
 bool 
 mkdir (const char *dir)
 {
-	/* TODO: handle file/dir names */
 	return filesys_create (dir, 0, true);
 }
 
