@@ -128,8 +128,53 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
+  struct file *file = filesys_open (name);
+  if (!file)
+    return false;
+
+  bool success = true;
+  char *path, *filename;
+  filesys_split_filepath (name, &path, &filename);
+
+  struct dir *dir = (path == NULL || strcmp (path, "") == 0)
+                    ? dir_reopen (thread_current ()->cwd)
+                    : dir_get_dir (path);
+
+  printf(" ----- is dir: %d cwd=%d cwd_1=%p name=%s path=%s file=%s \n", 
+    inode_get_is_dir (dir_get_inode (dir)), inode_get_is_dir (dir_get_inode (thread_current ()->cwd)), 
+    thread_current ()->cwd, name, path, filename);
+  // ASSERT (inode_get_is_dir (dir_get_inode (dir)) == true);
+
+  /* remove directory */
+  if (inode_get_is_dir (file_get_inode (file)))
+  {
+    struct dir *tmp_dir = malloc (sizeof(struct dir));
+    tmp_dir->inode = file->inode;
+    tmp_dir->pos = file->pos;
+  
+    block_sector_t file_sector = inode_get_inumber (dir_get_inode (tmp_dir));
+    block_sector_t cwd_sector  = inode_get_inumber (dir_get_inode (thread_current ()->cwd));
+    block_sector_t root_sector = inode_get_inumber (dir_get_inode (dir_open_root ()));
+    
+    if(file_sector == root_sector || file_sector == cwd_sector)
+    {
+      success = false; 
+    } 
+    else if (dir_is_empty (tmp_dir) && inode_get_open_cnt (dir_get_inode (tmp_dir)) <= 1)
+    {
+      success &= dir_remove (dir, filename);
+      inode_remove (file_get_inode (file));
+    }
+    free (tmp_dir);
+  }
+  /* remove file */
+  else
+  {
+    success &= dir_remove (dir, filename);
+    inode_remove (file_get_inode (file));
+  }
+ 
+  file_close (file);
   dir_close (dir); 
 
   return success;

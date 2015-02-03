@@ -343,6 +343,12 @@ inode_get_inumber (const struct inode *inode)
   return inode->sector;
 }
 
+int
+inode_get_open_cnt (const struct inode *inode)
+{
+  return inode->open_cnt;
+}
+
 bool 
 inode_get_is_dir (const struct inode *inode)
 {
@@ -413,20 +419,22 @@ inode_close (struct inode *inode)
     if (inode->removed) 
     {
       inode_free_sectors(inode);
-    }
-
+    } 
+    else
+    {
 /* TODO: totally ugly workaround for synchronisation problem */
-    struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
-    disk_inode->magic = INODE_MAGIC;
-    disk_inode->length = inode->length;
+      struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
+      disk_inode->magic = INODE_MAGIC;
+      disk_inode->length = inode->length;
 
-    int i;
-    for (i = 0; i < NR_OF_DIRECT; ++i)
-      disk_inode->direct[i] = inode->direct[i];
+      int i;
+      for (i = 0; i < NR_OF_DIRECT; ++i)
+        disk_inode->direct[i] = inode->direct[i];
 
-    disk_inode->single_indirect = inode->single_indirect;
-    disk_inode->double_indirect = inode->double_indirect;
-    cache_write_sector (disk_inode, inode->sector);
+      disk_inode->single_indirect = inode->single_indirect;
+      disk_inode->double_indirect = inode->double_indirect;
+      cache_write_sector (disk_inode, inode->sector);
+    }
 
     free (inode); 
   }

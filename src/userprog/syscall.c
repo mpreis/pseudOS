@@ -271,7 +271,6 @@ remove (const char *file)
  		exit(-1);
 
 	lock_acquire (&syscall_lock);
-	/* TODO: Clear empty directories */
 	bool b = filesys_remove (file);
 	lock_release (&syscall_lock);
   return b;
@@ -485,11 +484,12 @@ readdir (int fd, char *name)
 	if(dir_readdir (dir, name))
 	{
 		file->pos = dir->pos;
+		free (dir);
  		lock_release (&syscall_lock);
 		return true;
 	}
+ 	free (dir);
  	lock_release (&syscall_lock);
-
 	return false;
 }
 

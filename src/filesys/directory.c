@@ -226,6 +226,9 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
   struct dir_entry e;
 
+  if (dir->pos < (off_t)(sizeof(struct dir_entry)*2))
+    dir->pos = (off_t)(sizeof(struct dir_entry)*2);
+
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
@@ -270,4 +273,16 @@ dir_get_dir (const char *filepath)
     }
   }
   return dir;
+}
+
+bool 
+dir_is_empty (struct dir *dir)
+{
+  off_t save_pos = dir->pos;
+  char *tmp_name = malloc (NAME_MAX + 1);
+  dir->pos = 0;
+  bool empty = !dir_readdir (dir, tmp_name);
+  dir->pos = save_pos;
+  free (tmp_name);
+  return empty;
 }
