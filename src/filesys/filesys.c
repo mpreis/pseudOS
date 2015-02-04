@@ -162,6 +162,10 @@ filesys_remove (const char *name)
       success &= dir_remove (dir, filename);
       inode_remove (file_get_inode (file));
     }
+    else
+    {
+      success = false;
+    }
     free (tmp_dir);
   }
   /* remove file */

@@ -17,7 +17,7 @@
 #define SECTOR_FAILED -1
 
 
-static struct disk_inode * inode_to_disk_inode (struct inode *inode);
+static struct inode_disk * inode_to_disk_inode (struct inode *inode);
 
 /* On-disk inode. Unix like structure. 
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
@@ -555,7 +555,7 @@ inode_length (const struct inode *inode)
   return inode->length;
 }
 
-static struct disk_inode * 
+static struct inode_disk * 
 inode_to_disk_inode (struct inode *inode)
 {
   struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
