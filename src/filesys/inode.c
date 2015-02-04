@@ -16,6 +16,9 @@
 #define MAX_FILE_SECTORS NR_OF_DIRECT + NR_OF_INDIRECT + NR_OF_INDIRECT * NR_OF_INDIRECT
 #define SECTOR_FAILED -1
 
+
+static struct disk_inode * inode_to_disk_inode (struct inode *inode);
+
 /* On-disk inode. Unix like structure. 
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk
@@ -25,8 +28,8 @@ struct inode_disk
   block_sector_t direct[NR_OF_DIRECT];      /* 12 * BLOCK_SECTOR_SIZE = 6144 bytes. */
   block_sector_t single_indirect;           /* 128 * BLOCK_SECTOR_SIZE = 65536 bytes. */
   block_sector_t double_indirect;           /* 128 * 128 * BLOCK_SECTOR_SIZE = 8388608 bytes. */
-  unsigned magic;                           /* Magic number. */
   bool is_dir;
+  unsigned magic;                           /* Magic number. */
   uint32_t unused [NR_OF_INDIRECT - NR_OF_DIRECT - 5];
 };
 
@@ -158,12 +161,7 @@ inode_allocate_sectors (struct inode *inode, off_t pos)
   int old_idx = (inode->length == 0) ? -1 : DIV_ROUND_UP (inode->length, BLOCK_SECTOR_SIZE) - 1;
   int next_free_idx = old_idx + 1;
 
-  struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
-  disk_inode->magic = INODE_MAGIC;
-  disk_inode->length = inode->length;
-  disk_inode->single_indirect = inode->single_indirect;
-  disk_inode->double_indirect = inode->double_indirect;
-  disk_inode->is_dir = inode->is_dir;
+  struct inode_disk *disk_inode = inode_to_disk_inode (inode);
 
   /* There should be enough space on the last sector. */
   if (next_free_idx == new_idx)
@@ -422,21 +420,11 @@ inode_close (struct inode *inode)
     {
       inode_free_sectors(inode);
     } 
- //    else
- //    {
- // TODO: totally ugly workaround for synchronisation problem 
- //      struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
- //      disk_inode->magic = INODE_MAGIC;
- //      disk_inode->length = inode->length;
-
- //      int i;
- //      for (i = 0; i < NR_OF_DIRECT; ++i)
- //        disk_inode->direct[i] = inode->direct[i];
-
- //      disk_inode->single_indirect = inode->single_indirect;
- //      disk_inode->double_indirect = inode->double_indirect;
- //      cache_write_sector (disk_inode, inode->sector);
- //    }
+    else
+    {
+      struct inode_disk *disk_inode = inode_to_disk_inode (inode);
+      cache_write_sector (disk_inode, inode->sector);
+    }
 
     free (inode); 
   }
@@ -565,4 +553,25 @@ off_t
 inode_length (const struct inode *inode)
 {
   return inode->length;
+}
+
+static struct disk_inode * 
+inode_to_disk_inode (struct inode *inode)
+{
+  struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
+ 
+  if(!disk_inode)
+    return NULL;
+
+  disk_inode->length = inode->length;
+  disk_inode->magic = INODE_MAGIC;
+  disk_inode->single_indirect = inode->single_indirect;
+  disk_inode->double_indirect = inode->double_indirect;
+  disk_inode->is_dir = inode->is_dir;
+
+  int i;
+  for (i = 0; i < NR_OF_DIRECT; ++i)
+    disk_inode->direct[i] = inode->direct[i];
+
+  return disk_inode;
 }
