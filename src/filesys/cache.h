@@ -16,7 +16,6 @@ struct cache_entry_t
 	block_sector_t sector_idx;
 	void *buffer;
 	bool dirty;
-	bool accessed;
 	struct list_elem elem;
 };
 

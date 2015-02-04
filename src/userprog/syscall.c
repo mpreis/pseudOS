@@ -382,6 +382,12 @@ write (int fd, const void *buffer, unsigned size)
 	}
 	else if (fd >= FD_INIT && thread_current ()->fds[fd - FD_INIT] != NULL )
 	{
+		if (inode_get_is_dir (file_get_inode (thread_current ()->fds[fd -FD_INIT])))
+		{
+			lock_release (&syscall_lock);
+			exit (-1);
+		}
+
 		int r = file_write (
 			thread_current ()->fds[fd - FD_INIT],
 			buffer, size );
@@ -561,9 +567,9 @@ static bool
 is_valid_usr_ptr(const void * ptr, unsigned size)
 {
 	return ((ptr != NULL)
-		&& is_user_vaddr(ptr) && is_user_vaddr(ptr + size)
+		&& is_user_vaddr(ptr) //&& is_user_vaddr(ptr + size)
 		&& pagedir_get_page(thread_current()->pagedir, ptr) != 0
-		&& pagedir_get_page(thread_current()->pagedir, (ptr+size)) != 0);	
+		);//&& pagedir_get_page(thread_current()->pagedir, (ptr+size)) != 0);	
 }
 
 /*

@@ -163,6 +163,7 @@ inode_allocate_sectors (struct inode *inode, off_t pos)
   disk_inode->length = inode->length;
   disk_inode->single_indirect = inode->single_indirect;
   disk_inode->double_indirect = inode->double_indirect;
+  disk_inode->is_dir = inode->is_dir;
 
   /* There should be enough space on the last sector. */
   if (next_free_idx == new_idx)
@@ -316,7 +317,7 @@ inode_open (block_sector_t sector)
   {
     cache_read_sector (disk_inode, inode->sector);
     inode->length = disk_inode->length;
-
+  
     inode->is_dir = disk_inode->is_dir;
     inode->single_indirect = disk_inode->single_indirect;
     inode->double_indirect = disk_inode->double_indirect;
@@ -406,6 +407,7 @@ inode_free_sectors (struct inode *inode)
 void
 inode_close (struct inode *inode) 
 {
+  /* TODO: after closing and reopening the filesystem the 'is_dir' value of root is wrong !!! */
   /* Ignore null pointer. */
   if (inode == NULL)
     return;
@@ -420,21 +422,21 @@ inode_close (struct inode *inode)
     {
       inode_free_sectors(inode);
     } 
-    else
-    {
-/* TODO: totally ugly workaround for synchronisation problem */
-      struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
-      disk_inode->magic = INODE_MAGIC;
-      disk_inode->length = inode->length;
+ //    else
+ //    {
+ // TODO: totally ugly workaround for synchronisation problem 
+ //      struct inode_disk *disk_inode = calloc (1, sizeof *disk_inode);
+ //      disk_inode->magic = INODE_MAGIC;
+ //      disk_inode->length = inode->length;
 
-      int i;
-      for (i = 0; i < NR_OF_DIRECT; ++i)
-        disk_inode->direct[i] = inode->direct[i];
+ //      int i;
+ //      for (i = 0; i < NR_OF_DIRECT; ++i)
+ //        disk_inode->direct[i] = inode->direct[i];
 
-      disk_inode->single_indirect = inode->single_indirect;
-      disk_inode->double_indirect = inode->double_indirect;
-      cache_write_sector (disk_inode, inode->sector);
-    }
+ //      disk_inode->single_indirect = inode->single_indirect;
+ //      disk_inode->double_indirect = inode->double_indirect;
+ //      cache_write_sector (disk_inode, inode->sector);
+ //    }
 
     free (inode); 
   }

@@ -42,7 +42,6 @@ cache_init_entry (struct cache_entry_t *ce)
 {
 	ce->sector_idx = CACHE_SECTOR_IDX_DEFAULT;
 	ce->dirty = false;
-	ce->accessed = false;
 	memset (ce->buffer, 0, BLOCK_SECTOR_SIZE);
 }
 
@@ -123,7 +122,6 @@ cache_load (block_sector_t sector_idx)
 	struct list_elem *e = list_pop_front (&cache_free);
 	struct cache_entry_t *ce = list_entry (e, struct cache_entry_t, elem);
 	ce->sector_idx = sector_idx;
-	ce->accessed = true;
 	block_read (fs_device, sector_idx, ce->buffer);
 	list_push_back (&cache_used, &ce->elem);
 	return ce;

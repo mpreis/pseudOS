@@ -140,10 +140,7 @@ filesys_remove (const char *name)
                     ? dir_reopen (thread_current ()->cwd)
                     : dir_get_dir (path);
 
-  printf(" ----- is dir: %d cwd=%d cwd_1=%p name=%s path=%s file=%s \n", 
-    inode_get_is_dir (dir_get_inode (dir)), inode_get_is_dir (dir_get_inode (thread_current ()->cwd)), 
-    thread_current ()->cwd, name, path, filename);
-  // ASSERT (inode_get_is_dir (dir_get_inode (dir)) == true);
+  ASSERT (inode_get_is_dir (dir_get_inode (dir)) == true);
 
   /* remove directory */
   if (inode_get_is_dir (file_get_inode (file)))
