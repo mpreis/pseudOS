@@ -363,6 +363,7 @@ inode_free_sectors (struct inode *inode)
   // free directs
   for (i = 0; i <= idx && i < NR_OF_DIRECT; i++)
     free_map_release (inode->direct[i], 1);
+  if (i >= idx) goto end;
 
   // free single indirects
   block_sector_t single_indirect[NR_OF_INDIRECT];
@@ -372,6 +373,7 @@ inode_free_sectors (struct inode *inode)
     free_map_release (single_indirect[i], 1);
 
   free_map_release (inode->single_indirect, 1);
+  if (i >= idx) goto end;
 
   // free double indirects
   block_sector_t double_indirect[NR_OF_INDIRECT];
@@ -394,6 +396,7 @@ inode_free_sectors (struct inode *inode)
   if((inode->length/BLOCK_SECTOR_SIZE) > (NR_OF_DIRECT + NR_OF_INDIRECT))
     free_map_release (inode->double_indirect, 1);
 
+end:
   // free disk_inode sector
   free_map_release (inode->sector, 1);
 }

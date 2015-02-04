@@ -135,10 +135,13 @@ filesys_remove (const char *name)
   bool success = true;
   char *path, *filename;
   filesys_split_filepath (name, &path, &filename);
-
+  
   struct dir *dir = (path == NULL || strcmp (path, "") == 0)
                     ? dir_reopen (thread_current ()->cwd)
                     : dir_get_dir (path);
+
+  if (!dir)
+    return false;
 
   ASSERT (inode_get_is_dir (dir_get_inode (dir)) == true);
 
