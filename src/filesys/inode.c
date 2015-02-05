@@ -142,7 +142,9 @@ inode_allocate_d_ind_sectors (block_sector_t sector, int old_idx,
   int new_d_ind_idx = new_idx;
   int next_d_ind_idx = old_idx;
 
-  for (i = old_idx - bound; next_d_ind_idx < new_d_ind_idx && i < NR_OF_INDIRECT; i++)
+  int double_indirect_idx = (old_idx - NR_OF_DIRECT - NR_OF_INDIRECT) / NR_OF_INDIRECT;
+
+  for (i = double_indirect_idx; next_d_ind_idx < new_d_ind_idx && i < NR_OF_INDIRECT; i++)
   {
     double_indirect[i] = inode_allocate_ind_sectors (double_indirect[i], next_d_ind_idx, new_d_ind_idx, 
                           NR_OF_DIRECT + NR_OF_INDIRECT + i * NR_OF_INDIRECT);
@@ -174,7 +176,7 @@ inode_allocate_sectors (struct inode *inode, off_t pos)
 
   ASSERT(old_idx < new_idx);
 
-  if (old_idx < NR_OF_DIRECT)
+  if (next_free_idx < NR_OF_DIRECT)
   {
     for (; next_free_idx < new_idx && next_free_idx < NR_OF_DIRECT; next_free_idx++)
     {
@@ -185,19 +187,18 @@ inode_allocate_sectors (struct inode *inode, off_t pos)
     }
   }
 
-  if (old_idx < NR_OF_DIRECT + NR_OF_INDIRECT 
-      && new_idx >=  NR_OF_DIRECT)
+  if (next_free_idx < NR_OF_DIRECT + NR_OF_INDIRECT 
+      && new_idx > NR_OF_DIRECT)
   {
     disk_inode->single_indirect = inode_allocate_ind_sectors (inode->single_indirect, next_free_idx, 
                                                               new_idx, NR_OF_DIRECT);
     next_free_idx = NR_OF_DIRECT + NR_OF_INDIRECT; //set next_free_idx max, needed for double ind
   }
-  
-  if (old_idx < MAX_FILE_SECTORS
-      && new_idx >= (NR_OF_DIRECT + NR_OF_INDIRECT))
+  if (next_free_idx < MAX_FILE_SECTORS
+      && new_idx > (NR_OF_DIRECT + NR_OF_INDIRECT))
   {
-    disk_inode->double_indirect = inode_allocate_d_ind_sectors (inode->double_indirect, next_free_idx, new_idx, 
-                                                                NR_OF_DIRECT + NR_OF_INDIRECT);
+    disk_inode->double_indirect = inode_allocate_d_ind_sectors (inode->double_indirect, next_free_idx, 
+                                                                new_idx, NR_OF_DIRECT + NR_OF_INDIRECT);
   }
 
   disk_inode->length = pos;
