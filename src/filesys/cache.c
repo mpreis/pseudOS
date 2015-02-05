@@ -55,10 +55,10 @@ void
 cache_write (void *buffer, block_sector_t sector_idx, int sector_ofs, 
 	int chunk_size, off_t bytes_written)
 {
-	lock_acquire (&cache_global_lock);
 	struct cache_entry_t *ce = cache_lookup (sector_idx);
 	if (!ce) 
 		ce = cache_load (sector_idx);
+	lock_acquire (&cache_global_lock);
 	ce->dirty = true;
 	memcpy (ce->buffer + sector_ofs, buffer + bytes_written, chunk_size);
 	lock_release (&cache_global_lock);
@@ -74,10 +74,10 @@ void
 cache_read (void *buffer, block_sector_t sector_idx, int sector_ofs, 
 	int chunk_size, off_t bytes_read)
 {
-	lock_acquire (&cache_global_lock);
 	struct cache_entry_t *ce = cache_lookup (sector_idx);
 	if (!ce) 
 		ce = cache_load (sector_idx);
+	lock_acquire (&cache_global_lock);
 	memcpy (buffer + bytes_read, ce->buffer + sector_ofs, chunk_size);
 
 	block_sector_t sector_idx_next = sector_idx+1;
@@ -88,6 +88,7 @@ cache_read (void *buffer, block_sector_t sector_idx, int sector_ofs,
 void
 cache_flush (void)
 {
+	lock_acquire (&cache_global_lock);
 	struct list_elem *e;
 	for (e = list_begin (&cache_used); e != list_end (&cache_used); e = list_next (e))
 	{
@@ -98,6 +99,7 @@ cache_flush (void)
 			ce->dirty = false;
 		}
 	}
+	lock_release (&cache_global_lock);
 }
 
 static struct cache_entry_t *
@@ -148,9 +150,9 @@ cache_write_behind (void *aux UNUSED)
 {
 	while (true)
 	{
-		lock_acquire (&cache_global_lock);
+		// lock_acquire (&cache_global_lock);
 		cache_flush ();
-		lock_release (&cache_global_lock);
+		// lock_release (&cache_global_lock);
 		timer_sleep (CACHE_WRITE_BEHIND_PERIOD);
 	}
 }

@@ -49,6 +49,7 @@ struct inode
     int open_cnt;                         /* Number of openers. */
     bool removed;                         /* True if deleted, false otherwise. */
     int deny_write_cnt;                   /* 0: writes ok, >0: deny writes. */
+    struct lock lock;
 
     bool is_dir;
     off_t length;                         /* File size in bytes. */
@@ -254,6 +255,7 @@ inode_create (block_sector_t sector, off_t length, bool is_dir)
     inode->deny_write_cnt = 0;
     inode->removed = false;
     inode->length = 0;
+    lock_init (&inode->lock);
 
     // dummy write, to expand the inode to the given length
     char *tmp = "d";
@@ -307,7 +309,8 @@ inode_open (block_sector_t sector)
   inode->open_cnt = 1;
   inode->deny_write_cnt = 0;
   inode->removed = false;
-
+  lock_init (&inode->lock);
+  
   struct inode_disk *disk_inode = NULL;
   disk_inode = calloc (1, sizeof *disk_inode);
   if(disk_inode)
@@ -500,7 +503,11 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     return 0;
 
   if(offset+size > inode_length(inode))
+  {
+    if(!inode->is_dir) inode_lock_acquire (inode);
     inode_allocate_sectors (inode, offset + size);
+    if(!inode->is_dir) inode_lock_release (inode);
+  }
 
   while (size > 0) 
     {
@@ -576,4 +583,16 @@ inode_to_disk_inode (struct inode *inode)
     disk_inode->direct[i] = inode->direct[i];
 
   return disk_inode;
+}
+
+void
+inode_lock_acquire (struct inode *inode)
+{
+  lock_acquire (&inode->lock);
+}
+
+void
+inode_lock_release (struct inode *inode)
+{
+  lock_release (&inode->lock);
 }

@@ -322,6 +322,12 @@ filesize (int fd)
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
 		exit(-1);
 
+	if (inode_get_is_dir (file_get_inode (thread_current ()->fds[fd -FD_INIT])))
+	{
+		lock_release (&syscall_lock);
+		exit (-1);
+	}
+
 	lock_acquire (&syscall_lock);
 	int size = file_length ( thread_current ()->fds[fd - FD_INIT] );
   lock_release (&syscall_lock);
@@ -352,6 +358,14 @@ read (int fd, void *buffer, unsigned size)
 	} 
 	else if ( fd >= FD_INIT && thread_current ()->fds[fd - FD_INIT] != NULL )
 	{
+		
+		if (inode_get_is_dir (file_get_inode (thread_current ()->fds[fd -FD_INIT])))
+		{
+			lock_release (&syscall_lock);
+			exit (-1);
+		}
+
+
 		int r = file_read (
 			thread_current ()->fds[fd - FD_INIT],
 			buffer, size );
@@ -408,6 +422,12 @@ seek (int fd, unsigned position)
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
 		exit(-1);
 
+	if (inode_get_is_dir (file_get_inode (thread_current ()->fds[fd -FD_INIT])))
+	{
+		lock_release (&syscall_lock);
+		exit (-1);
+	}
+
 	lock_acquire (&syscall_lock);
 	file_seek (
 		thread_current ()->fds[fd - FD_INIT], 
@@ -423,6 +443,12 @@ tell (int fd)
 {
 	if( ! is_valid_fd(fd) || thread_current ()->fds[fd - FD_INIT] == NULL )
 		exit(-1);
+
+	if (inode_get_is_dir (file_get_inode (thread_current ()->fds[fd -FD_INIT])))
+	{
+		lock_release (&syscall_lock);
+		exit (-1);
+	}
 
 	lock_acquire (&syscall_lock);
 	unsigned pos = file_tell( (struct file *) thread_current ()->fds[fd - FD_INIT] ); 
