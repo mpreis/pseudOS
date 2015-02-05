@@ -124,10 +124,9 @@ inode_allocate_ind_sectors (block_sector_t sector, int old_idx, int new_idx, int
 }
 
 static block_sector_t
-inode_allocate_d_ind_sectors (struct inode *inode, int old_idx, 
+inode_allocate_d_ind_sectors (block_sector_t sector, int old_idx, 
                             int new_idx, int bound)
 {
-  block_sector_t sector = inode->sector;
   int i;
 
   if(old_idx <= bound)
@@ -196,7 +195,7 @@ inode_allocate_sectors (struct inode *inode, off_t pos)
   if (old_idx < MAX_FILE_SECTORS
       && new_idx >= (NR_OF_DIRECT + NR_OF_INDIRECT))
   {
-    disk_inode->double_indirect = inode_allocate_d_ind_sectors (inode, next_free_idx, new_idx, 
+    disk_inode->double_indirect = inode_allocate_d_ind_sectors (inode->double_indirect, next_free_idx, new_idx, 
                                                                 NR_OF_DIRECT + NR_OF_INDIRECT);
   }
 
