@@ -310,7 +310,7 @@ inode_open (block_sector_t sector)
   inode->deny_write_cnt = 0;
   inode->removed = false;
   lock_init (&inode->lock);
-  
+
   struct inode_disk *disk_inode = NULL;
   disk_inode = calloc (1, sizeof *disk_inode);
   if(disk_inode)
@@ -586,13 +586,13 @@ inode_to_disk_inode (struct inode *inode)
 }
 
 void
-inode_lock_acquire (struct inode *inode)
+inode_lock_acquire (const struct inode *inode)
 {
-  lock_acquire (&inode->lock);
+  lock_acquire (&((struct inode *)inode)->lock);
 }
 
 void
-inode_lock_release (struct inode *inode)
+inode_lock_release (const struct inode *inode)
 {
-  lock_release (&inode->lock);
+  lock_release (&((struct inode *)inode)->lock);
 }
