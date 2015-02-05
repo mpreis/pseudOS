@@ -144,7 +144,7 @@ inode_allocate_d_ind_sectors (struct inode *inode, int old_idx,
 
   for (i = old_idx - bound; next_d_ind_idx < new_d_ind_idx && i < NR_OF_INDIRECT; i++)
   {
-    double_indirect[i] = inode_allocate_ind_sectors (inode->sector, next_d_ind_idx, new_d_ind_idx, 
+    double_indirect[i] = inode_allocate_ind_sectors (double_indirect[i], next_d_ind_idx, new_d_ind_idx, 
                           NR_OF_DIRECT + NR_OF_INDIRECT + i * NR_OF_INDIRECT);
     next_d_ind_idx += NR_OF_INDIRECT;
   }
@@ -188,7 +188,7 @@ inode_allocate_sectors (struct inode *inode, off_t pos)
   if (old_idx < NR_OF_DIRECT + NR_OF_INDIRECT 
       && new_idx >=  NR_OF_DIRECT)
   {
-    disk_inode->single_indirect = inode_allocate_ind_sectors (inode->sector, next_free_idx, 
+    disk_inode->single_indirect = inode_allocate_ind_sectors (inode->single_indirect, next_free_idx, 
                                                               new_idx, NR_OF_DIRECT);
     next_free_idx = NR_OF_DIRECT + NR_OF_INDIRECT; //set next_free_idx max, needed for double ind
   }
