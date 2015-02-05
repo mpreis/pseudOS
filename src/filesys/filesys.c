@@ -52,12 +52,15 @@ filesys_done (void)
 bool
 filesys_create (const char *name, off_t initial_size, bool is_dir) 
 {
-  if (name == NULL || strlen (name) == 0 || strlen (name) > NAME_MAX)
+  if (name == NULL || strlen (name) == 0)
     return false;
 
   block_sector_t inode_sector = 0;
   char *path, *filename;
   filesys_split_filepath (name, &path, &filename);
+
+  if(strlen (filename) > NAME_MAX)
+    return false;
 
   struct dir *dir = (path == NULL)
     ? dir_reopen (thread_current ()->cwd)
@@ -97,7 +100,7 @@ filesys_create (const char *name, off_t initial_size, bool is_dir)
 struct file *
 filesys_open (const char *name)
 {
-  if (name == NULL || strlen (name) == 0 || strlen (name) > NAME_MAX)
+  if (name == NULL || strlen (name) == 0)
     return NULL;
 
   char *path, *filename;
@@ -114,10 +117,11 @@ filesys_open (const char *name)
       return file_open (dir->inode);
 
     dir_lookup (dir, filename, &inode);
-
     dir_close (dir);
+
     return file_open (inode);
   }
+
   return NULL;
 }
 

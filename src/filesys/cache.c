@@ -82,7 +82,7 @@ cache_read (void *buffer, block_sector_t sector_idx, int sector_ofs,
 
 	block_sector_t sector_idx_next = sector_idx+1;
 	lock_release (&cache_global_lock);
-	thread_create ("cache_read_ahead", PRI_DEFAULT, &cache_read_ahead, (void *)sector_idx_next);
+	//thread_create ("cache_read_ahead", PRI_DEFAULT, &cache_read_ahead, (void *)sector_idx_next);
 }
 
 void
