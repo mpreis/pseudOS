@@ -21,7 +21,7 @@
 static struct lock syscall_lock; /* pseudOS: Lock variable to ensure a secure execution of a system-call. */
 
 static void syscall_handler (struct intr_frame *);
-static bool is_valid_usr_ptr(const void * ptr, unsigned size);	/* pseudOS: Checks if the given pointer is a valid user-space pointer. */
+static bool is_valid_usr_ptr(const void * ptr);	/* pseudOS: Checks if the given pointer is a valid user-space pointer. */
 static bool is_valid_fd(int fd);				/* pseudOS: Checks if the given file-descriptor is valid. */
 
 void
@@ -34,7 +34,7 @@ syscall_init (void)
 void
 syscall_handler (struct intr_frame *f) 
 {
-	if(!is_valid_usr_ptr(f->esp, 0)) 
+	if(!is_valid_usr_ptr(f->esp)) 
 		exit(-1);
 
 	switch(*(uint32_t *) (f->esp))
@@ -213,7 +213,7 @@ exit (int status)
 pid_t 
 exec (const char *cmd_line)
 {
-	if( ! is_valid_usr_ptr (cmd_line, 0) ) 
+	if( ! is_valid_usr_ptr (cmd_line) ) 
  		exit(-1);
  	
  	lock_acquire (&syscall_lock);
@@ -252,7 +252,7 @@ wait (pid_t pid)
 bool 
 create (const char *file, unsigned initial_size)
 {
- 	if( ! is_valid_usr_ptr (file, initial_size) ) 
+ 	if( ! is_valid_usr_ptr (file) ) 
  		exit(-1);
 	
 	lock_acquire (&syscall_lock);
@@ -267,7 +267,7 @@ create (const char *file, unsigned initial_size)
 bool 
 remove (const char *file)
 {
- 	if( ! is_valid_usr_ptr (file, 0) ) 
+ 	if( ! is_valid_usr_ptr (file) ) 
  		exit(-1);
 
 	lock_acquire (&syscall_lock);
@@ -283,7 +283,7 @@ remove (const char *file)
 int 
 open (const char *file)
 {
- 	if( ! is_valid_usr_ptr (file, 0) ) 
+ 	if( ! is_valid_usr_ptr (file) ) 
  		exit(-1);
 
  	lock_acquire (&syscall_lock);
@@ -342,7 +342,7 @@ filesize (int fd)
 int 
 read (int fd, void *buffer, unsigned size)
 {
-	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
+	if( !is_valid_usr_ptr (buffer) || !is_valid_fd(fd) ) 
  		exit(-1);
 
  	lock_acquire (&syscall_lock);
@@ -384,7 +384,7 @@ read (int fd, void *buffer, unsigned size)
 int 
 write (int fd, const void *buffer, unsigned size)
 { 
-	if( !is_valid_usr_ptr (buffer, size) || !is_valid_fd(fd) ) 
+	if( !is_valid_usr_ptr (buffer) || !is_valid_fd(fd) ) 
  		exit(-1);
 
  	lock_acquire (&syscall_lock);
@@ -590,12 +590,10 @@ inumber (int fd)
  * resources.
  */
 static bool
-is_valid_usr_ptr(const void * ptr, unsigned size)
+is_valid_usr_ptr(const void * ptr)
 {
-	return ((ptr != NULL)
-		&& is_user_vaddr(ptr) //&& is_user_vaddr(ptr + size)
-		&& pagedir_get_page(thread_current()->pagedir, ptr) != 0
-		);//&& pagedir_get_page(thread_current()->pagedir, (ptr+size)) != 0);	
+	return ((ptr != NULL) && is_user_vaddr(ptr)
+		&& pagedir_get_page(thread_current()->pagedir, ptr) != 0);	
 }
 
 /*
