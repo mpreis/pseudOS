@@ -265,7 +265,7 @@ dir_get_dir (const char *filepath)
   char *save_ptr, *token;
 
   // check absolute or relative path
-  dir = (filepath_copy[0] == '/') // TODO: cwd != NULL?
+  dir = (filepath_copy[0] == '/')
         ? dir_open_root ()
         : dir_reopen (thread_current ()->cwd);
 

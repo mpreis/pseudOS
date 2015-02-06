@@ -29,8 +29,56 @@ Mario Preishuber, 1120643
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Extensions of filesys/inode.c:
+	struct inode_disk
+	{
+	  /* meta */
+	  off_t length;                             /* File size in bytes. */
+	  block_sector_t direct[NR_OF_DIRECT];      /* 12 * BLOCK_SECTOR_SIZE = 6144 bytes. */
+	  block_sector_t single_indirect;           /* 128 * BLOCK_SECTOR_SIZE = 65536 bytes. */
+	  block_sector_t double_indirect;           /* 128 * 128 * BLOCK_SECTOR_SIZE = 8388608 bytes. */
+	  bool is_dir;								/* Show if this inode represents a file or dir */
+	  unsigned magic;                           /* Magic number. */
+	  uint32_t unused [NR_OF_INDIRECT - NR_OF_DIRECT - 5];
+	};
+
+Like before inode_disk represents an inode which is hold on the disk 
+to save the data persistent. 
+
+	struct inode 
+	{
+		struct list_elem elem;                	/* Element in inode list. */
+		block_sector_t sector;                	/* Sector number of disk location. */
+		int open_cnt;                         	/* Number of openers. */
+		bool removed;                         	/* True if deleted, false otherwise. */
+		int deny_write_cnt;                   	/* 0: writes ok, >0: deny writes. */
+		struct lock lock;						/* Fine-grained lock per inode */
+
+		bool is_dir;							/* Show if this inode represents a file or dir */
+		off_t length;                         	/* File size in bytes. */
+		block_sector_t direct[NR_OF_DIRECT];  	/* 12 * BLOCK_SECTOR_SIZE = 6144 bytes. */
+		block_sector_t single_indirect;       	/* 128 * BLOCK_SECTOR_SIZE = 65536 bytes. */
+		block_sector_t double_indirect;       	/* 128 * 128 * BLOCK_SECTOR_SIZE = 8388608 bytes. */
+	};
+
+struct unode is the in-memory representation of the inode. Compared 
+with the previous implementation there is no reference on the 
+disk_inode anymore, just the number of the disk sector where the 
+disk_inode can be found.
+
+
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
+#direct = 12 		 ->	#sectors =              12
+#indirect = 1 		 ->	#sectors =             128
+#double_indirect = 1 ->	#sectors = 128*128 = 16384
+----------------------------------------------------
+						#sectors_total =     16524
+											 -----
+
+The sector size is 512B, this leads to a maximum file size of
+	max_file_size = 16524 * 512B = 8460288B
+								   ========
 
 ---- SYNCHRONIZATION ----
 
@@ -59,6 +107,13 @@ Mario Preishuber, 1120643
 >> structure, and what advantages and disadvantages does your
 >> structure have, compared to a multilevel index?
 
+As it is proposed in the documentation we decided to implement a UNIX 
+like file system. This means we have 12 direct, 1 indirect and 1 
+double-indirect blocks. Unlike in UNIX we haven't implemented a triple 
+indirect block, because it is just required to support 8MB files, which 
+is fine with direct, indirect and double indirect. 
+
+
 			    SUBDIRECTORIES
 			    ==============
 
@@ -68,10 +123,22 @@ Mario Preishuber, 1120643
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+Extensions of thread/threads.h:
+    struct dir *cwd;		/* each thread needs to hold the directory 
+    							he is currently working on */
+
 ---- ALGORITHMS ----
 
 >> B2: Describe your code for traversing a user-specified path.  How
 >> do traversals of absolute and relative paths differ?
+
+To traverse a user-specified path, we go the logical way from the left 
+the right. This means, at first we check if it is a absolute or a 
+relative path by looking at the first symbol, which is a forward slash 
+or not. For an absolute path we have to start at the root, otherwise we 
+start at the current working directory. After that, we take each part of 
+the directory name of the path and check if it exists. If so, we open it 
+and go on with that folder. 
 
 ---- SYNCHRONIZATION ----
 
@@ -80,15 +147,32 @@ Mario Preishuber, 1120643
 >> should succeed, as should only one of two simultaneous attempts to
 >> create a file with the same name, and so on.
 
+We have implemented a fine-grained locking mechanism at inode level. 
+To avoid the above described situations we acquire a lock on the 
+specific inode when removing or adding a directory. 
+
 >> B5: Does your implementation allow a directory to be removed if it
 >> is open by a process or if it is in use as a process's current
 >> working directory?  If so, what happens to that process's future
 >> file system operations?  If not, how do you prevent it?
 
+We have several check in our filesys_remove() implementation to avoid 
+all unwanted situations. In particular we check if the directory 
+which should be removed is the root or the current working directory. 
+Furthermore we check if the directory is empty, just in this case it 
+is allowed to remove it. 
+In any case of failure we return false and tell the caller that 
+removing the directory failed. 
+
 ---- RATIONALE ----
 
 >> B6: Explain why you chose to represent the current directory of a
 >> process the way you did.
+
+Every process needs to know his actual working directory at any time, 
+so the only useful way for us was to add a thread-local directory 
+variable. 
+
 
 			     BUFFER CACHE
 			     ============
