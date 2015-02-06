@@ -101,6 +101,11 @@ starts from this length on.
 >> nonzero data, A is not allowed to see all zeros.  Explain how your
 >> code avoids this race.
 
+The size of a file stays the same unitl the file has been successfully
+extended. If A starts reading during or before extending it will read
+till the old length. If A starts reading after the file has been
+extended A is able to read till the new end.
+
 >> A5: Explain how your synchronization design provides "fairness".
 >> File access is "fair" if readers cannot indefinitely block writers
 >> or vice versa.  That is, many processes reading from a file cannot
@@ -108,6 +113,8 @@ starts from this length on.
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
 
+In our implementation we use a global filesystem lock. Which implicates
+that our system is not that kind of fair.
 
 ---- RATIONALE ----
 
