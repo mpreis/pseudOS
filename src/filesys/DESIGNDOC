@@ -16,6 +16,9 @@ Mario Preishuber, 1120643
 >> If you have any preliminary comments on your submission, notes for the
 >> TAs, or extra credit, please give them here.
 
+We implemented read-ahead as descripted below, but leads to several 
+synchronisation issues. So we disabled read-ahead. 
+
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
@@ -228,14 +231,31 @@ and timer_sleep is called. This results in a periodic flush of the cache.
 
 >> C4: Describe your implementation of read-ahead.
 
+During initialising the cache we create a thread, which handles the read-ahead.
+At the end of the method cache_read we call a method cache_read_ahead, with the
+index of the next sector as paramenter. cache_read_ahead checks if the given 
+sector is already cached or if we have to load it. In case of loading we put the
+sector on the cache_read_ahead_requests list. This list is used to communiacte with
+the thread started during initialisation. We use a conditional variable to wakeup this
+thread. The thread takes the first element of the cache_read_ahead_requets list and
+loads it. This mechanism works similar as descript in the Pintos doumentaion A.3.4
+Monitor.
+
 ---- SYNCHRONIZATION ----
 
 >> C5: When one process is actively reading or writing data in a
 >> buffer cache block, how are other processes prevented from evicting
 >> that block?
 
+We use a global cache lock to prevent the eviction of cache entries. 
+
 >> C6: During the eviction of a block from the cache, how are other
 >> processes prevented from attempting to access the block?
+
+We take the first element of the list cache_used by calling 
+list_pop_front. So it is not possible for any other thread to access
+this cache entry. The global lock also helps to prevent others from
+attempting to access. 
 
 ---- RATIONALE ----
 

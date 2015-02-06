@@ -7,17 +7,18 @@
 
 #include <list.h>
 
-#define CACHE_SIZE 64
-#define CACHE_SECTOR_IDX_DEFAULT 0
-#define CACHE_WRITE_BEHIND_PERIOD 100
+#define CACHE_SIZE 64					// number of cache entries (size of cache)
+#define CACHE_SECTOR_IDX_DEFAULT 0		// initial sector value
+#define CACHE_WRITE_BEHIND_PERIOD 100	// time to sleep of the write behind thread
 
 struct cache_entry_t
 {
-	block_sector_t sector_idx;
-	void *buffer;
-	bool dirty;
+	block_sector_t sector_idx;	// represents the data sector on disk
+	void *buffer;				// cache bufer
+	bool dirty;					// indiactes if the data has been changed since loading
 	struct list_elem elem;
 };
+
 
 void cache_init (void);
 void cache_flush (void);

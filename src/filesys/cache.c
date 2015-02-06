@@ -5,26 +5,39 @@
 
 #include <string.h>
 
-static struct list cache_used;
-static struct list cache_free;
+static struct list cache_used;					// a list of acutal used cache entries
+static struct list cache_free;					// a list of acutal unused cache entries
+static struct list cache_read_ahead_requests;	//
 
 static struct lock cache_global_lock;
+static struct lock cache_read_ahead_lock;
+static struct condition cache_not_empty_cond;
 
-static void cache_write_behind (void *aux UNUSED);
-static void cache_read_ahead (void *aux);
+static void cache_write_behind_deamon (void *aux UNUSED);
+static void cache_read_ahead_deamon (void *aux) 		UNUSED;
+static void cache_read_ahead (block_sector_t sector) 	UNUSED;
 
 static void cache_evict (void);
 static struct cache_entry_t * cache_lookup (block_sector_t sector_idx);
 static struct cache_entry_t * cache_load (block_sector_t sector_idx);
 static void cache_init_entry (struct cache_entry_t *ce);
 
+struct cache_read_ahead_entry
+{
+	block_sector_t sector;
+	struct list_elem elem;
+};
+
 void
 cache_init (void)
 {
 	list_init (&cache_used);
 	list_init (&cache_free);
+	list_init (&cache_read_ahead_requests);
 
 	lock_init (&cache_global_lock);
+	lock_init (&cache_read_ahead_lock);
+	cond_init (&cache_not_empty_cond);
 
 	unsigned i;
 	for(i = 0; i < CACHE_SIZE; i++)
@@ -34,7 +47,8 @@ cache_init (void)
 		cache_init_entry (ce);
 		list_push_back (&cache_free, &ce->elem);
 	}
-	thread_create ("cache_write_behind", PRI_DEFAULT, &cache_write_behind, NULL);
+	thread_create ("c_wb_deamon", PRI_DEFAULT, &cache_write_behind_deamon, NULL);
+	// thread_create ("c_ra_deamon", PRI_DEFAULT, &cache_read_ahead_deamon, NULL);
 }
 
 static void
@@ -58,6 +72,7 @@ cache_write (void *buffer, block_sector_t sector_idx, int sector_ofs,
 	struct cache_entry_t *ce = cache_lookup (sector_idx);
 	if (!ce) 
 		ce = cache_load (sector_idx);
+
 	lock_acquire (&cache_global_lock);
 	ce->dirty = true;
 	memcpy (ce->buffer + sector_ofs, buffer + bytes_written, chunk_size);
@@ -77,12 +92,11 @@ cache_read (void *buffer, block_sector_t sector_idx, int sector_ofs,
 	struct cache_entry_t *ce = cache_lookup (sector_idx);
 	if (!ce) 
 		ce = cache_load (sector_idx);
+	
 	lock_acquire (&cache_global_lock);
 	memcpy (buffer + bytes_read, ce->buffer + sector_ofs, chunk_size);
-
-	block_sector_t sector_idx_next = sector_idx+1;
 	lock_release (&cache_global_lock);
-	//thread_create ("cache_read_ahead", PRI_DEFAULT, &cache_read_ahead, (void *)sector_idx_next);
+	// cache_read_ahead (sector_idx+1);
 }
 
 void
@@ -118,6 +132,7 @@ cache_lookup (block_sector_t sector_idx)
 static struct cache_entry_t *
 cache_load (block_sector_t sector_idx)
 {
+	lock_acquire (&cache_global_lock);
 	if(list_empty (&cache_free))
 		cache_evict ();
 
@@ -126,6 +141,7 @@ cache_load (block_sector_t sector_idx)
 	ce->sector_idx = sector_idx;
 	block_read (fs_device, sector_idx, ce->buffer);
 	list_push_back (&cache_used, &ce->elem);
+	lock_release (&cache_global_lock);
 	return ce;
 }
 
@@ -136,17 +152,14 @@ cache_evict (void)
 	
 	struct cache_entry_t *ce = list_entry (e, struct cache_entry_t, elem);
 	if (ce->dirty)
-	{
 		block_write (fs_device, ce->sector_idx, ce->buffer);
-		cache_flush ();
-	}
 
 	cache_init_entry (ce);
 	list_push_back (&cache_free, &ce->elem);
 }
 
 static void 
-cache_write_behind (void *aux UNUSED)
+cache_write_behind_deamon (void *aux UNUSED)
 {
 	while (true)
 	{
@@ -158,14 +171,35 @@ cache_write_behind (void *aux UNUSED)
 }
 
 static void
-cache_read_ahead (void *aux)
+cache_read_ahead (block_sector_t sector)
 {
-	lock_acquire (&cache_global_lock);
+	lock_acquire (&cache_read_ahead_lock);
 	
-	block_sector_t sector_idx = (block_sector_t) aux;
-	struct cache_entry_t *ce_next = cache_lookup (sector_idx);
+	struct cache_entry_t *ce_next = cache_lookup (sector);
 	if(!ce_next)
-		cache_load (sector_idx);
+	{
+		struct cache_read_ahead_entry *e = malloc (sizeof(struct cache_read_ahead_entry));
+		e->sector = sector;
+		list_push_back (&cache_read_ahead_requests, &e->elem);
+		cond_signal (&cache_not_empty_cond, &cache_read_ahead_lock);
+	}
+	lock_release (&cache_read_ahead_lock);
+}
 
-	lock_release (&cache_global_lock);
+
+static void
+cache_read_ahead_deamon (void *aux UNUSED)
+{
+	while (true)
+	{
+		lock_acquire (&cache_read_ahead_lock);
+		while (list_empty (&cache_read_ahead_requests))
+			cond_wait (&cache_not_empty_cond, &cache_read_ahead_lock);
+
+		struct list_elem *le = list_pop_front (&cache_read_ahead_requests);
+		struct cache_read_ahead_entry *ce = list_entry (le, struct cache_read_ahead_entry, elem);
+		cache_load (ce->sector);
+		free (ce);
+		lock_release (&cache_read_ahead_lock);
+	}
 }
