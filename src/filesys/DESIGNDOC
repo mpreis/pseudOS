@@ -85,6 +85,12 @@ The sector size is 512B, this leads to a maximum file size of
 >> A3: Explain how your code avoids a race if two processes attempt to
 >> extend a file at the same time.
 
+All attempts to extend a file happens over inode_write_at. In the case 
+that 2 processes try to extend at the same file at a time, we use the 
+inode lock for making this exclusive. After the first process finishes 
+the length is already set to the new value and the second process 
+starts from this length on. 
+
 >> A4: Suppose processes A and B both have file F open, both
 >> positioned at end-of-file.  If A reads and B writes F at the same
 >> time, A may read all, part, or none of what B writes.  However, A
@@ -98,6 +104,7 @@ The sector size is 512B, this leads to a maximum file size of
 >> prevent forever another process from writing the file, and many
 >> processes writing to a file cannot prevent another process forever
 >> from reading the file.
+
 
 ---- RATIONALE ----
 
