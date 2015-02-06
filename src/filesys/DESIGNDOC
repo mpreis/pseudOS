@@ -99,12 +99,48 @@ Mario Preishuber, 1120643
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+cache.h:
+
+#define CACHE_SIZE 64					// number of cache entries (size of cache)
+#define CACHE_SECTOR_IDX_DEFAULT 0		// initial sector value
+#define CACHE_WRITE_BEHIND_PERIOD 100	// time to sleep of the write behind thread
+
+struct cache_entry_t
+{
+	block_sector_t sector_idx;	// represents the data sector on disk
+	void *buffer;				// cache bufer
+	bool dirty;					// indiactes if the data has been changed since loading
+	struct list_elem elem;
+};
+
+cache.c:
+
+static struct list cache_used;	// a list of acutal used cache entries
+static struct list cache_free;	// a list of acutal unused cache entries
+
+
+
 ---- ALGORITHMS ----
 
 >> C2: Describe how your cache replacement algorithm chooses a cache
 >> block to evict.
 
+We implemented a kind of a clock algorithm. There is one list (cache_used), 
+which holds all acutal cached entries. And another list (cache_free), which 
+holds unused cache entries. 
+
+Is it necessary to evict a cache entrie we take the first entrie of the 
+cache_used list, check if the entry is dirty, if so, we write the data back 
+to disc. In both cases (entry is dirty or not) the next step is to reset 
+the cache entry and to append it at the end of the cache_free list. 
+If an new sector is cached, we take the first entry of the cache_free list,
+load the data, and append it at the end of the cache_used list.
+
 >> C3: Describe your implementation of write-behind.
+
+During initialising the cache we create a thread, which handles the write-behind.
+The methode the thread executes contains a infinit loop within the loop cache_flush
+and timer_sleep is called. This results in a periodic flush of the cache.
 
 >> C4: Describe your implementation of read-ahead.
 
@@ -121,6 +157,29 @@ Mario Preishuber, 1120643
 
 >> C7: Describe a file workload likely to benefit from buffer caching,
 >> and workloads likely to benefit from read-ahead and write-behind.
+
+Buffer caching:
+Caching reduces the disc reads/writes, which are expensiv operations. 
+If we think of a situation where we modifiy a sector and check it
+after writing, we need without cache 2 disc-read and 1 disc-write operation.
+Using a cache allows us to handle the same case with 1 disc-read and
+1 disc-write.
+
+Read-ahead:
+It happens very often, that a file is scanned. If we think of a file as 
+sequencial memory, the probability that the following sector will be read
+is high. The most expensive part of reading from the disc, is moving the
+head. To reduce the moving we the following sector also. 
+
+Write-behind:
+If cache_write is called instead of block_write we expact that it is faster
+(in average), but we also expact that the data is writen of disc. We beneift 
+most of a cache if not the whole sector is write a one time. The data 
+has not to be write immediately to the disc. The most efficient way to write
+back the data would be to write if there is one other disc-I/O interaction.
+It is also important to write the data periodically, because in case of 
+a crach we don't want to loose to much data. 
+
 
 			   SURVEY QUESTIONS
 			   ================
