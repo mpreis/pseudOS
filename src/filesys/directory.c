@@ -153,7 +153,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
  
-  inode_lock_acquire (dir_get_inode ((struct dir *)dir));
+  inode_lock_acquire (dir_get_inode (dir));
 
   /* Check NAME for validity. */
   if (*name == '\0' || strlen (name) > NAME_MAX)
@@ -182,7 +182,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 
  done:
-  inode_lock_release (dir_get_inode ((struct dir *)dir));
+  inode_lock_release (dir_get_inode (dir));
   return success;
 }
 
@@ -200,7 +200,7 @@ dir_remove (struct dir *dir, const char *name)
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
   
-  inode_lock_acquire (dir_get_inode ((struct dir *)dir));
+  inode_lock_acquire (dir_get_inode (dir));
 
   /* Find directory entry. */
   if (!lookup (dir, name, &e, &ofs))
@@ -222,7 +222,7 @@ dir_remove (struct dir *dir, const char *name)
 
  done:
   inode_close (inode);
-  inode_lock_release (dir_get_inode ((struct dir *)dir));
+  inode_lock_release (dir_get_inode (dir));
   return success;
 }
 
@@ -232,7 +232,7 @@ dir_remove (struct dir *dir, const char *name)
 bool
 dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
 {
-  inode_lock_acquire (dir_get_inode ((struct dir *)dir));
+  inode_lock_acquire (dir_get_inode (dir));
 
   struct dir_entry e;
   if (dir->pos < (off_t)(sizeof(struct dir_entry)*2))
@@ -244,11 +244,11 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
       if (e.in_use)
         {
           strlcpy (name, e.name, NAME_MAX + 1);
-          inode_lock_release (dir_get_inode ((struct dir *)dir));
+          inode_lock_release (dir_get_inode (dir));
           return true;
         } 
     }
-  inode_lock_release (dir_get_inode ((struct dir *)dir));
+  inode_lock_release (dir_get_inode (dir));
   return false;
 }
 

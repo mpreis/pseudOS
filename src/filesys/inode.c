@@ -587,13 +587,13 @@ inode_to_disk_inode (struct inode *inode)
 }
 
 void
-inode_lock_acquire (const struct inode *inode)
+inode_lock_acquire (struct inode *inode)
 {
-  lock_acquire (&((struct inode *)inode)->lock);
+  lock_acquire (&inode->lock); 
 }
 
 void
-inode_lock_release (const struct inode *inode)
+inode_lock_release (struct inode *inode)
 {
-  lock_release (&((struct inode *)inode)->lock);
+  lock_release (&inode->lock);
 }
